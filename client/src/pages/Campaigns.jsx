@@ -1,0 +1,337 @@
+import { useState, useEffect } from 'react';
+import { Play, Pause, Square, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import {
+  getCampaigns, createCampaign, launchCampaign, pauseCampaign, stopCampaign,
+  getCampaignLeads, getTemplates, getLeads,
+} from '../api';
+
+function StatusBadge({ status }) {
+  const styles = {
+    draft: 'bg-gray-500/20 text-gray-400',
+    running: 'bg-amber-500/20 text-amber-400 animate-pulse-amber',
+    paused: 'bg-yellow-500/20 text-yellow-400',
+    done: 'bg-green-500/20 text-green-400',
+    pending: 'bg-gray-500/20 text-gray-400',
+    sent: 'bg-green-500/20 text-green-400',
+    failed: 'bg-red-500/20 text-red-400',
+  };
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${styles[status] || styles.draft}`}>
+      {status}
+    </span>
+  );
+}
+
+export default function Campaigns() {
+  const [campaigns, setCampaigns] = useState([]);
+  const [templates, setTemplates] = useState([]);
+  const [allLeads, setAllLeads] = useState([]);
+  const [expandedId, setExpandedId] = useState(null);
+  const [expandedLeads, setExpandedLeads] = useState([]);
+
+  // Form state
+  const [form, setForm] = useState({
+    name: '',
+    template_id: '',
+    delay_min: 30,
+    delay_max: 90,
+  });
+  const [selectedLeadIds, setSelectedLeadIds] = useState([]);
+  const [leadFilter, setLeadFilter] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  const fetchAll = async () => {
+    try {
+      const [c, t, l] = await Promise.all([getCampaigns(), getTemplates(), getLeads(1, 500)]);
+      setCampaigns(c);
+      setTemplates(t);
+      setAllLeads(l.data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => { fetchAll(); }, []);
+
+  const handleCreate = async () => {
+    if (!form.name || !form.template_id || selectedLeadIds.length === 0) return;
+    setCreating(true);
+    try {
+      await createCampaign({
+        name: form.name,
+        template_id: form.template_id,
+        lead_ids: selectedLeadIds,
+        delay_min: form.delay_min,
+        delay_max: form.delay_max,
+      });
+      setForm({ name: '', template_id: '', delay_min: 30, delay_max: 90 });
+      setSelectedLeadIds([]);
+      fetchAll();
+    } catch (err) {
+      console.error(err);
+    }
+    setCreating(false);
+  };
+
+  const handleExpand = async (id) => {
+    if (expandedId === id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(id);
+    try {
+      const data = await getCampaignLeads(id);
+      setExpandedLeads(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleLaunch = async (id) => { await launchCampaign(id); fetchAll(); };
+  const handlePause = async (id) => { await pauseCampaign(id); fetchAll(); };
+  const handleStop = async (id) => { await stopCampaign(id); fetchAll(); };
+
+  const availableLeads = allLeads.filter(
+    (l) =>
+      !selectedLeadIds.includes(l.id) &&
+      (l.name?.toLowerCase().includes(leadFilter.toLowerCase()) ||
+        l.email?.toLowerCase().includes(leadFilter.toLowerCase()))
+  );
+  const selectedLeads = allLeads.filter((l) => selectedLeadIds.includes(l.id));
+
+  const addLead = (id) => setSelectedLeadIds([...selectedLeadIds, id]);
+  const removeLead = (id) => setSelectedLeadIds(selectedLeadIds.filter((x) => x !== id));
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold mb-6">Campaigns</h2>
+
+      {/* ── New Campaign Form ───────────────────────────── */}
+      <div className="glass-card p-5 mb-8">
+        <h3 className="text-sm font-semibold text-muted mb-4 uppercase tracking-wider">New Campaign</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-xs text-muted mb-1.5">Campaign Name</label>
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="e.g. Q1 Outreach"
+              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1.5">Template</label>
+            <select
+              value={form.template_id}
+              onChange={(e) => setForm({ ...form, template_id: e.target.value })}
+              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white"
+            >
+              <option value="">Select a template…</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Lead selector */}
+        <label className="block text-xs text-muted mb-1.5">Select Leads</label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          {/* Available */}
+          <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden">
+            <div className="px-3 py-2 border-b border-[#1e1e1e] flex items-center gap-2">
+              <Search size={13} className="text-muted" />
+              <input
+                value={leadFilter}
+                onChange={(e) => setLeadFilter(e.target.value)}
+                placeholder="Filter leads…"
+                className="bg-transparent text-xs text-white placeholder-gray-600 outline-none flex-1"
+              />
+            </div>
+            <div className="max-h-40 overflow-y-auto">
+              {availableLeads.length === 0 ? (
+                <p className="px-3 py-4 text-xs text-muted text-center">No leads available</p>
+              ) : (
+                availableLeads.map((l) => (
+                  <button
+                    key={l.id}
+                    onClick={() => addLead(l.id)}
+                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-amber-500/10 hover:text-amber-400 transition-colors flex justify-between"
+                  >
+                    <span className="truncate">{l.name || l.email}</span>
+                    <span className="text-gray-600 ml-2">{l.company || ''}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Selected */}
+          <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden">
+            <div className="px-3 py-2 border-b border-[#1e1e1e]">
+              <p className="text-xs text-muted">{selectedLeadIds.length} selected</p>
+            </div>
+            <div className="max-h-40 overflow-y-auto">
+              {selectedLeads.length === 0 ? (
+                <p className="px-3 py-4 text-xs text-muted text-center">Click leads on the left to add</p>
+              ) : (
+                selectedLeads.map((l) => (
+                  <div
+                    key={l.id}
+                    className="w-full px-3 py-1.5 text-xs text-amber-400 flex items-center justify-between hover:bg-red-500/10 group"
+                  >
+                    <span className="truncate">{l.name || l.email}</span>
+                    <button onClick={() => removeLead(l.id)} className="text-gray-600 group-hover:text-red-400">
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Delay settings */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-xs text-muted mb-1.5">Min Delay (seconds): {form.delay_min}s</label>
+            <input
+              type="range"
+              min="5"
+              max="300"
+              value={form.delay_min}
+              onChange={(e) => setForm({ ...form, delay_min: parseInt(e.target.value) })}
+              className="w-full accent-amber-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1.5">Max Delay (seconds): {form.delay_max}s</label>
+            <input
+              type="range"
+              min="5"
+              max="600"
+              value={form.delay_max}
+              onChange={(e) => setForm({ ...form, delay_max: parseInt(e.target.value) })}
+              className="w-full accent-amber-500"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={handleCreate}
+          disabled={creating || !form.name || !form.template_id || selectedLeadIds.length === 0}
+          className="px-5 py-2 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 text-sm"
+        >
+          {creating ? 'Creating…' : 'Create Campaign'}
+        </button>
+      </div>
+
+      {/* ── Campaign Cards ──────────────────────────────── */}
+      <div className="space-y-4">
+        {campaigns.length === 0 && (
+          <p className="text-muted text-sm text-center py-12">No campaigns yet. Create one above.</p>
+        )}
+        {campaigns.map((c) => {
+          const pct = c.total_leads > 0 ? Math.round(((c.sent_count + c.failed_count) / c.total_leads) * 100) : 0;
+          const isExpanded = expandedId === c.id;
+          return (
+            <div key={c.id} className="glass-card overflow-hidden animate-fade-in">
+              {/* Card header */}
+              <div
+                className="p-5 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                onClick={() => handleExpand(c.id)}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <h4 className="font-semibold text-white">{c.name}</h4>
+                    <StatusBadge status={c.status} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {/* Actions */}
+                    {(c.status === 'draft' || c.status === 'paused') && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleLaunch(c.id); }}
+                        className="p-2 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                        title="Launch"
+                      >
+                        <Play size={14} />
+                      </button>
+                    )}
+                    {c.status === 'running' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handlePause(c.id); }}
+                        className="p-2 rounded-lg bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"
+                        title="Pause"
+                      >
+                        <Pause size={14} />
+                      </button>
+                    )}
+                    {(c.status === 'running' || c.status === 'paused') && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleStop(c.id); }}
+                        className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                        title="Stop"
+                      >
+                        <Square size={14} />
+                      </button>
+                    )}
+                    {isExpanded ? <ChevronUp size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-6 text-xs text-muted mb-2">
+                  <span>Template: <span className="text-gray-300">{c.templates?.name || '—'}</span></span>
+                  <span>Total: <span className="text-white">{c.total_leads}</span></span>
+                  <span>Sent: <span className="text-green-400">{c.sent_count}</span></span>
+                  <span>Failed: <span className="text-red-400">{c.failed_count}</span></span>
+                  <span>{new Date(c.created_at).toLocaleDateString()}</span>
+                </div>
+
+                <div className="progress-bar">
+                  <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+
+              {/* Expanded details */}
+              {isExpanded && (
+                <div className="border-t border-[#1e1e1e] animate-fade-in">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[#1e1e1e] text-muted">
+                          <th className="px-5 py-2.5 text-left font-medium">Lead Email</th>
+                          <th className="px-5 py-2.5 text-left font-medium">Sender</th>
+                          <th className="px-5 py-2.5 text-left font-medium">Status</th>
+                          <th className="px-5 py-2.5 text-left font-medium">Sent At</th>
+                          <th className="px-5 py-2.5 text-left font-medium">Error</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expandedLeads.length === 0 ? (
+                          <tr><td colSpan={5} className="px-5 py-4 text-center text-muted">No leads</td></tr>
+                        ) : (
+                          expandedLeads.map((cl) => (
+                            <tr key={cl.id} className="border-b border-[#1e1e1e]">
+                              <td className="px-5 py-2 text-white font-mono">{cl.leads?.email || '—'}</td>
+                              <td className="px-5 py-2 text-muted">{cl.accounts?.email || '—'}</td>
+                              <td className="px-5 py-2"><StatusBadge status={cl.status} /></td>
+                              <td className="px-5 py-2 text-muted">
+                                {cl.sent_at ? new Date(cl.sent_at).toLocaleString() : '—'}
+                              </td>
+                              <td className="px-5 py-2 text-red-400 max-w-xs truncate">{cl.error || ''}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
