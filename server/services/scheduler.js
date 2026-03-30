@@ -1,20 +1,44 @@
-/**
- * MailFlow — Daily Scheduler Service
- *
- * Runs every day at 8:00 AM UTC.
- * For each campaign with auto_scrape_enabled:
- *   1. Runs the multi-source scraper with the saved query
- *   2. Adds new leads to the campaign
- *   3. If campaign is running, new leads auto-enter the send queue
- */
-
 const cron = require('node-cron');
 const supabase = require('../db');
-const { scrapeLeads } = require('./scraper');
-const { startCampaign } = require('./queue');
+const { scrapeLeads, scrapeLeadsMultiCity } = require('./scraper');
 
 async function runDailySchedule() {
   console.log('[Scheduler] ▶ Daily schedule started');
+
+  // Fetch scheduler config for global task
+  const { data: config, error: configError } = await supabase
+    .from('scheduler_config')
+    .select('*')
+    .eq('id', 1)
+    .single();
+
+  if (configError) {
+    console.error('[Scheduler] Config error:', configError.message);
+  } else if (config && config.enabled) {
+    const globalQuery = config.query || "painters decorators";
+    console.log(`[Scheduler] Global task starting: "${globalQuery}"`);
+    
+    try {
+      // Automatically run multi-city scraper
+      const result = await scrapeLeadsMultiCity({
+        query: globalQuery,
+        campaignId: null, // Global leads
+        sources: ['google_maps', 'google_search'],
+        onEvent: (ev) => {
+          if (ev.type === 'log') {
+            // Simple console logging for progress
+            console.log(`[Global Scrape Log] ${ev.data}`);
+          }
+        }
+      });
+
+      console.log(`Scheduled scrape complete: ${result.found} leads found`);
+    } catch (err) {
+      console.error(`[Global Scrape Error] ${err.message}`);
+    }
+  } else {
+    console.log('[Scheduler] Global auto-scrape is disabled in config.');
+  }
 
   try {
     // Fetch all campaigns with auto-scrape enabled
@@ -52,11 +76,6 @@ async function runDailySchedule() {
         });
 
         console.log(`[Scheduler] "${campaign.name}" — Found: ${result.found}, Saved: ${result.saved}, Skipped: ${result.skipped}`);
-
-        // If campaign is running and new leads were added, the queue will pick them up
-        // on its next cycle since they're inserted as 'pending' campaign_leads.
-        // If campaign is draft/paused, leads are stored but not sent until launched.
-
       } catch (err) {
         console.error(`[Scheduler] Error scraping for "${campaign.name}":`, err.message);
       }
@@ -72,15 +91,15 @@ async function runDailySchedule() {
 }
 
 function initScheduler() {
-  // Run daily at 8:00 AM UTC
-  cron.schedule('0 8 * * *', () => {
+  // Run daily at 02:00 AM UTC
+  cron.schedule('0 2 * * *', () => {
     console.log('[Scheduler] ▶ Triggering daily auto-scrape...');
     runDailySchedule();
   }, {
     timezone: 'UTC',
   });
 
-  console.log('✦ Cron: Daily auto-scrape scheduler active (8:00 AM UTC)');
+  console.log('✦ Cron: Daily auto-scrape scheduler active (02:00 AM UTC)');
 }
 
 module.exports = { initScheduler, runDailySchedule };

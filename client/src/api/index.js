@@ -68,3 +68,7 @@ export const runScraper = (query, campaignId, sources) =>
     method: 'POST',
     body: JSON.stringify({ query, campaign_id: campaignId || null, sources }),
   });
+
+export const getScraperConfig = () => request('/api/scraper/config');
+export const updateScraperConfig = (data) =>
+  request('/api/scraper/config', { method: 'PATCH', body: JSON.stringify(data) });

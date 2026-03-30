@@ -44,3 +44,14 @@ CREATE TABLE IF NOT EXISTS scraped_urls (
   url         text UNIQUE NOT NULL,
   scraped_at  timestamptz DEFAULT now()
 );
+
+-- Migration: Add scheduler_config table
+CREATE TABLE IF NOT EXISTS scheduler_config (
+  id integer PRIMARY KEY DEFAULT 1,
+  query text DEFAULT 'painters decorators',
+  enabled boolean DEFAULT true,
+  updated_at timestamptz DEFAULT now()
+);
+INSERT INTO scheduler_config (id, query, enabled) 
+VALUES (1, 'painters decorators', true)
+ON CONFLICT (id) DO NOTHING;

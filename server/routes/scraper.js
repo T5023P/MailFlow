@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const supabase = require('../db');
 const { scrapeLeads, scrapeLeadsMultiCity, queryHasCity, UK_CITIES } = require('../services/scraper');
 
 /**
@@ -128,5 +129,48 @@ router.get('/cities', (req, res) => {
   res.json({ cities: UK_CITIES, count: UK_CITIES.length });
 });
 
+/**
+ * GET /api/scraper/config
+ * Returns current scheduler configuration.
+ */
+router.get('/config', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('scheduler_config')
+      .select('*')
+      .eq('id', 1)
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/scraper/config
+ * Updates scheduler query and enabled status.
+ */
+router.patch('/config', async (req, res) => {
+  const { query, enabled } = req.body;
+  const updates = { updated_at: new Date() };
+  if (query !== undefined) updates.query = query;
+  if (enabled !== undefined) updates.enabled = enabled;
+
+  try {
+    const { data, error } = await supabase
+      .from('scheduler_config')
+      .update(updates)
+      .eq('id', 1)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

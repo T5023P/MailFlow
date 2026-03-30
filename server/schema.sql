@@ -67,3 +67,16 @@ CREATE TABLE IF NOT EXISTS scraped_urls (
   url         text UNIQUE NOT NULL,
   scraped_at  timestamptz DEFAULT now()
 );
+
+-- 7. Scheduler Config — stores the automatic 2AM scrape settings
+CREATE TABLE IF NOT EXISTS scheduler_config (
+  id          integer PRIMARY KEY DEFAULT 1,
+  query       text DEFAULT 'painters decorators',
+  enabled     boolean DEFAULT true,
+  updated_at  timestamptz DEFAULT now()
+);
+
+-- Seed initial config
+INSERT INTO scheduler_config (id, query, enabled) 
+VALUES (1, 'painters decorators', true)
+ON CONFLICT (id) DO NOTHING;

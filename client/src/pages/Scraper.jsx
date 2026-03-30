@@ -3,7 +3,7 @@ import {
   Globe, Search, Loader2, CheckCircle2, AlertCircle,
   MapPin, ExternalLink, Mail, Phone, Building2, ChevronDown, Map,
 } from 'lucide-react';
-import { getCampaigns } from '../api';
+import { getCampaigns, getScraperConfig, updateScraperConfig } from '../api';
 
 const BASE = import.meta.env.VITE_API_URL;
 
@@ -29,6 +29,12 @@ export default function Scraper() {
   const [cityProgress, setCityProgress] = useState(() => { try { return JSON.parse(localStorage.getItem('scraper_cityProgress')) || null; } catch { return null; } });
   const [mode, setMode] = useState(() => localStorage.getItem('scraper_mode') || null);
   const [completedCities, setCompletedCities] = useState(() => { try { return JSON.parse(localStorage.getItem('scraper_completedCities')) || []; } catch { return []; } });
+  
+  // Scheduler Config State
+  const [schedQuery, setSchedQuery] = useState('');
+  const [schedEnabled, setSchedEnabled] = useState(true);
+  const [schedLoading, setSchedLoading] = useState(false);
+  const [schedMsg, setSchedMsg] = useState(null);
 
   // Persist state
   useEffect(() => {
@@ -46,6 +52,13 @@ export default function Scraper() {
   useEffect(() => {
     getCampaigns()
       .then(setCampaigns)
+      .catch(() => {});
+
+    getScraperConfig()
+      .then(cfg => {
+        setSchedQuery(cfg.query);
+        setSchedEnabled(cfg.enabled);
+      })
       .catch(() => {});
   }, []);
 
@@ -156,6 +169,20 @@ export default function Scraper() {
     } catch (err) {
       setError(err.message || 'Scraper failed');
       setLoading(false);
+    }
+  };
+
+  const handleSaveSchedule = async () => {
+    setSchedLoading(true);
+    setSchedMsg(null);
+    try {
+      await updateScraperConfig({ query: schedQuery, enabled: schedEnabled });
+      setSchedMsg({ type: 'success', text: '✓ Schedule saved successfully.' });
+      setTimeout(() => setSchedMsg(null), 3000);
+    } catch (err) {
+      setSchedMsg({ type: 'error', text: `✗ ${err.message}` });
+    } finally {
+      setSchedLoading(false);
     }
   };
 
@@ -311,6 +338,56 @@ export default function Scraper() {
             <AlertCircle size={14} />
             {error}
           </div>
+        )}
+      </div>
+
+      {/* ── Scheduler Settings ─────────────────────────── */}
+      <div className="glass-card p-5 mb-6 border-l-4 border-amber-500/50">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            Daily 2AM Scraper Settings
+          </h3>
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${schedEnabled ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+              {schedEnabled ? 'ACTIVE' : 'DISABLED'}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+          <div className="md:col-span-7">
+            <label className="block text-xs text-gray-500 mb-1.5">Tonight's Scrape Query</label>
+            <input
+              value={schedQuery}
+              onChange={(e) => setSchedQuery(e.target.value)}
+              placeholder='e.g. "painters decorators"'
+              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white focus:border-amber-500/50 outline-none"
+            />
+          </div>
+          <div className="md:col-span-3 flex items-center gap-3 pb-2.5">
+            <button
+              onClick={() => setSchedEnabled(!schedEnabled)}
+              className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${schedEnabled ? 'bg-amber-500' : 'bg-gray-700'}`}
+            >
+              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${schedEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+            <span className="text-xs text-gray-400">Auto-scrape enabled</span>
+          </div>
+          <div className="md:col-span-2">
+            <button
+              onClick={handleSaveSchedule}
+              disabled={schedLoading}
+              className="w-full py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded-lg border border-white/10 transition disabled:opacity-50"
+            >
+              {schedLoading ? 'SAVING...' : 'SAVE SCHEDULE'}
+            </button>
+          </div>
+        </div>
+        {schedMsg && (
+          <p className={`mt-3 text-[11px] font-medium transition-all ${schedMsg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+            {schedMsg.text}
+          </p>
         )}
       </div>
 
