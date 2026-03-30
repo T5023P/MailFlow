@@ -2,6 +2,24 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../db');
 const { scrapeLeads, scrapeLeadsMultiCity, queryHasCity, UK_CITIES } = require('../services/scraper');
+const { runDailySchedule } = require('../services/scheduler');
+
+/**
+ * GET /api/scraper/cron
+ * Manual trigger for the daily 2AM scheduler.
+ * Useful for external cron services (Render, GitHub Actions, etc.)
+ */
+router.get('/cron', async (req, res) => {
+  // Optional: Add a simple secret check if you want to keep it private
+  // if (req.query.secret !== process.env.CRON_SECRET) return res.status(401).send('Unauthorized');
+  
+  console.log('[API] External trigger for daily schedule received');
+  
+  // Run in background so the request doesn't timeout
+  runDailySchedule().catch(err => console.error('[Cron Endpoint Error]', err));
+  
+  res.json({ message: 'Daily schedule triggered in background' });
+});
 
 /**
  * POST /api/scraper/run
