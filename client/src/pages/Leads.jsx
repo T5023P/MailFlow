@@ -24,12 +24,20 @@ export default function Leads() {
   const [toast, setToast] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState({ email: '', name: '', company: '', city: '', service: '', custom1: '', custom2: '' });
+  
+  // Filter states
+  const [niches, setNiches] = useState([]);
+  const [dates, setDates] = useState([]);
+  const [selectedNiche, setSelectedNiche] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [filtersLoading, setFiltersLoading] = useState(false);
+
   const fileRef = useRef(null);
   const limit = 50;
 
   const fetchLeads = async () => {
     try {
-      const res = await getLeads(page, limit);
+      const res = await getLeads(page, limit, selectedNiche, selectedDate);
       setLeads(res.data);
       setTotal(res.total);
     } catch (e) {
@@ -37,7 +45,26 @@ export default function Leads() {
     }
   };
 
-  useEffect(() => { fetchLeads(); }, [page]);
+  const fetchFilters = async () => {
+    setFiltersLoading(true);
+    try {
+      const res = await getLeadFilters();
+      setNiches(res.niches);
+      setDates(res.dates);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFiltersLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+    fetchFilters(); 
+  }, []);
+
+  useEffect(() => { 
+    fetchLeads(); 
+  }, [page, selectedNiche, selectedDate]);
 
   const showToast = (text) => {
     setToast(text);
@@ -66,6 +93,7 @@ export default function Leads() {
         try {
           const res = await bulkAddLeads(mapped);
           showToast(`${res.imported} leads imported, ${res.skipped} duplicates skipped`);
+          fetchFilters();
           fetchLeads();
         } catch (err) {
           showToast(`Error: ${err.message}`);
@@ -92,12 +120,14 @@ export default function Leads() {
     await deleteAllLeads();
     setConfirmDelete(false);
     setPage(1);
+    fetchFilters();
     fetchLeads();
     showToast('All leads deleted');
   };
 
   const handleDeleteOne = async (id) => {
     await deleteLead(id);
+    fetchFilters();
     fetchLeads();
   };
 
@@ -128,6 +158,46 @@ export default function Leads() {
         >
           <Trash2 size={15} /> Delete All
         </button>
+      </div>
+
+      {/* ── Filters ─────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-4 mb-6 p-4 bg-[#111] border border-[#1e1e1e] rounded-xl">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] text-muted uppercase tracking-wider font-bold ml-1">Filter by Niche</label>
+          <select
+            value={selectedNiche}
+            onChange={(e) => { setSelectedNiche(e.target.value); setPage(1); }}
+            className="bg-[#0a0a0a] border border-[#1e1e1e] text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-amber-500/50 min-w-[200px]"
+          >
+            <option value="">All Niches</option>
+            {niches.map(n => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] text-muted uppercase tracking-wider font-bold ml-1">Filter by Date</label>
+          <select
+            value={selectedDate}
+            onChange={(e) => { setSelectedDate(e.target.value); setPage(1); }}
+            className="bg-[#0a0a0a] border border-[#1e1e1e] text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-amber-500/50 min-w-[150px]"
+          >
+            <option value="">All Dates</option>
+            {dates.map(d => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </div>
+
+        {(selectedNiche || selectedDate) && (
+          <button
+            onClick={() => { setSelectedNiche(''); setSelectedDate(''); setPage(1); }}
+            className="mt-auto mb-1 text-xs text-amber-500 hover:text-amber-400 font-medium px-2 py-1"
+          >
+            Clear Filters
+          </button>
+        )}
       </div>
 
       {/* Confirm Dialog */}

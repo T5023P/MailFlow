@@ -2,16 +2,55 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../db');
 
-// GET /api/leads — paginated list
+// GET /api/leads/filters — get unique niches and dates
+router.get('/filters', async (req, res) => {
+  try {
+    // Get unique niches (service column)
+    const { data: niches } = await supabase
+      .from('leads')
+      .select('service')
+      .not('service', 'is', null);
+    
+    // Get unique dates (created_at)
+    const { data: rawDates } = await supabase
+      .from('leads')
+      .select('created_at');
+
+    const uniqueNiches = [...new Set(niches.map(n => n.service))].sort();
+    const uniqueDates = [...new Set(rawDates.map(d => new Date(d.created_at).toISOString().split('T')[0]))].sort().reverse();
+
+    res.json({ niches: uniqueNiches, dates: uniqueDates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/leads — paginated list with optional filters
 router.get('/', async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 50;
+  const niche = req.query.niche;
+  const date = req.query.date; // YYYY-MM-DD
+  
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  const { data, error, count } = await supabase
+  let query = supabase
     .from('leads')
-    .select('*', { count: 'exact' })
+    .select('*', { count: 'exact' });
+
+  if (niche) {
+    query = query.eq('service', niche);
+  }
+
+  if (date) {
+    // Filter by date range (start of day to end of day)
+    const start = `${date}T00:00:00.000Z`;
+    const end = `${date}T23:59:59.999Z`;
+    query = query.gte('created_at', start).lte('created_at', end);
+  }
+
+  const { data, error, count } = await query
     .order('created_at', { ascending: false })
     .range(from, to);
 

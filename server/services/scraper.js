@@ -70,14 +70,14 @@ const USER_AGENTS = [
 const EMAIL_REGEX = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
 
 const BLOCKED_DOMAINS = [
-  'gmail.com', 'yahoo.com', 'yahoo.co.uk', 'hotmail.com', 'hotmail.co.uk',
+  'cmskimkc', 'cmskimkcc', 'yahoo.co.uk', 'hotmail.com', 'hotmail.co.uk',
   'outlook.com', 'live.com', 'live.co.uk', 'sentry.io', 'wixpress.com',
   'googleapis.com', 'schema.org', 'w3.org', 'gravatar.com', 'wordpress.org',
   'jquery.com', 'facebook.com', 'twitter.com', 'instagram.com',
   'google.com', 'youtube.com', 'cloudflare.com', 'amazonaws.com',
 ];
 
-const BLOCKED_PREFIXES = ['noreply', 'no-reply', 'admin@', 'webmaster@', 'info@gmail', 'support@example', 'info@example'];
+const BLOCKED_PREFIXES = ['noreply', 'no-reply', 'admin@', 'webmaster@', 'sexsexsex', 'support@example', 'info@example'];
 
 // Must end with .com or .co.uk
 const ALLOWED_SUFFIXES = ['.com', '.co.uk'];
@@ -98,7 +98,7 @@ function randomDelay(minMs = 3000, maxMs = 5000) {
 function validateEmail(e) {
   const email = e.toLowerCase().replace(/\.$/, '').trim();
   if (email.length > 80) return false;
-  
+
   const parts = email.split('@');
   if (parts.length !== 2) return false;
   const domain = parts[1];
@@ -108,10 +108,10 @@ function validateEmail(e) {
 
   // No blocked domains (gmail, yahoo, etc.)
   if (BLOCKED_DOMAINS.some(d => domain.includes(d))) return false;
-  
+
   // No blocked prefixes
   if (BLOCKED_PREFIXES.some(p => email.startsWith(p))) return false;
-  
+
   // No image extensions
   if (email.includes('.png') || email.includes('.jpg') || email.includes('.svg') || email.includes('.gif')) return false;
 
@@ -136,9 +136,9 @@ async function fetchPageAxios(url, timeoutMs = 8000) {
         'Connection': 'keep-alive',
       },
       timeout: timeoutMs,
-      validateStatus: () => true 
+      validateStatus: () => true
     });
-    
+
     if (res.status !== 200) return null;
     const ct = res.headers['content-type'] || '';
     if (!ct.includes('text/html') && !ct.includes('text/plain') && !ct.includes('application/xhtml')) return null;
@@ -161,7 +161,7 @@ async function extractEmailsFromWebsite(websiteUrl, log) {
   if (!url.startsWith('http')) url = 'https://' + url;
 
   log(`  → Deep check: ${url}`);
-  
+
   // Check Homepage
   let homeHtml = await fetchPageAxios(url, 8000);
   if (homeHtml) emails.push(...extractEmails(homeHtml));
@@ -225,7 +225,7 @@ async function scrapeGoogleMapsNative(query, log) {
     browser = await initBrowser();
     const page = await browser.newPage();
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-GB,en;q=0.9' });
-    
+
     log(`[Google Maps Native] Navigating to ${searchUrl}`);
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
@@ -237,7 +237,7 @@ async function scrapeGoogleMapsNative(query, log) {
         await acceptBtn.click();
         await new Promise(r => setTimeout(r, 2000));
       }
-    } catch {}
+    } catch { }
 
     // Wait for the main scrollable sidebar
     try {
@@ -268,7 +268,7 @@ async function scrapeGoogleMapsNative(query, log) {
       try {
         await page.goto(b.href, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await new Promise(r => setTimeout(r, 1500));
-        
+
         // Find the website button "Website" or global link
         const websiteUrl = await page.evaluate(() => {
           const wLink = document.querySelector('a[data-item-id="authority"], a[href^="http"]:not([href*="google"])');
@@ -279,7 +279,7 @@ async function scrapeGoogleMapsNative(query, log) {
           log(`  ✓ Got URL for ${b.name}: ${websiteUrl}`);
           await randomDelay(3000, 5000);
           const emails = await extractEmailsFromWebsite(websiteUrl, log);
-          
+
           if (emails.length > 0) {
             log(`    => Extracted Email: ${emails[0]}`);
             results.push({
@@ -332,7 +332,7 @@ async function scrapeGoogleSearchNative(query, log) {
     for (const qObj of queriesToRun) {
       log(`[Google Search Native] Query: ${qObj}`);
       const searchUrl = `https://www.google.co.uk/search?q=${encodeURIComponent(qObj)}&num=40`;
-      
+
       await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
       try {
@@ -342,7 +342,7 @@ async function scrapeGoogleSearchNative(query, log) {
           await acceptBtn.click();
           await new Promise(r => setTimeout(r, 2000));
         }
-      } catch {}
+      } catch { }
 
       const html = await page.content();
       if (html.includes('detected unusual traffic') || html.includes('recaptcha')) {
@@ -351,15 +351,15 @@ async function scrapeGoogleSearchNative(query, log) {
       }
 
       const emailsFound = extractEmails(html);
-      
+
       for (const email of emailsFound) {
         log(`    ✓ Found Email in snippet: ${email}`);
-        
+
         // Generate a rough name based on keywords or email domain
         let domainParts = email.split('@')[1].split('.');
         let fallbackName = domainParts[0].charAt(0).toUpperCase() + domainParts[0].slice(1);
         let name = keywords ? keywords.charAt(0).toUpperCase() + keywords.slice(1) : fallbackName;
-        
+
         results.push({
           name: name,
           phone: '',
@@ -369,10 +369,10 @@ async function scrapeGoogleSearchNative(query, log) {
           city: city
         });
       }
-      
+
       await randomDelay(3000, 5000);
     }
-    
+
     await browser.close();
 
   } catch (err) {
@@ -453,7 +453,7 @@ function deduplicateResults(allResults) {
   return uniqueResults;
 }
 
-async function saveResults({ withEmails, campaignId, log }) {
+async function saveResults({ withEmails, query, campaignId, log }) {
   const existingEmails = new Set();
   if (withEmails.length > 0) {
     for (let i = 0; i < withEmails.length; i += 100) {
@@ -477,9 +477,9 @@ async function saveResults({ withEmails, campaignId, log }) {
       name: r.name || null,
       company: r.name || null,
       city: r.city || null,
-      service: r.source || null,
+      service: query || r.source || null, // Niche name
       custom1: r.phone || null,
-      custom2: r.website || null,
+      custom2: (r.website || '') + (r.source ? ` (Source: ${r.source})` : ''),
       status: 'pending',
     }));
 
@@ -542,11 +542,11 @@ async function scrapeLeads({ query, campaignId, sources = ['google_maps', 'googl
   };
 
   log(`Starting multi-source scrape: "${query}"`);
-  
+
   const { allResults, sourceCounts } = await scrapeSingleCity({ query, sources, log });
   const uniqueResults = deduplicateResults(allResults);
   const withEmails = uniqueResults.filter(r => r.email);
-  const { savedCount, skipped } = await saveResults({ withEmails, campaignId, log });
+  const { savedCount, skipped } = await saveResults({ withEmails, query, campaignId, log });
 
   log('\n✦ Scrape complete!');
 
@@ -571,7 +571,7 @@ async function scrapeLeadsMultiCity({ query, campaignId, sources, onEvent, skipC
   const allCities = UK_CITIES;
   const totalCities = allCities.length;
   const citiesToScrape = allCities.filter(c => !skipCities.includes(c));
-  
+
   const allResultsGlobal = [];
   const sourceCountsGlobal = {};
   const allLogs = [];
@@ -609,9 +609,9 @@ async function scrapeLeadsMultiCity({ query, campaignId, sources, onEvent, skipC
     });
 
     log(`\n━━━ City ${cityNum}/${totalCities}: ${city} ━━━`);
-    
+
     let cityResults = [];
-    
+
     try {
       const { allResults, sourceCounts } = await scrapeSingleCity({ query: `${query} ${city}`, sources, log });
 
@@ -630,15 +630,15 @@ async function scrapeLeadsMultiCity({ query, campaignId, sources, onEvent, skipC
         cityUniqueResults.push(r);
         allResultsGlobal.push(r);
       }
-      
+
       const cityWithEmails = cityUniqueResults.filter(r => r.email);
       cityResults = cityWithEmails;
       totalFoundGlobal += cityWithEmails.length;
-      
+
       // Incrementally Save to DB per City
       if (cityWithEmails.length > 0) {
         log(`Saving ${cityWithEmails.length} leads for ${city}...`);
-        const { savedCount, skipped } = await saveResults({ withEmails: cityWithEmails, campaignId, log });
+        const { savedCount, skipped } = await saveResults({ withEmails: cityWithEmails, query, campaignId, log });
         totalSavedGlobal += savedCount;
         totalDeduplicatedGlobal += skipped;
       } else {

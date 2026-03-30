@@ -23,8 +23,13 @@ export const deleteAccount = (id) =>
   request(`/api/accounts/${id}`, { method: 'DELETE' });
 
 // ── Leads ────────────────────────────────────────────
-export const getLeads = (page = 1, limit = 50) =>
-  request(`/api/leads?page=${page}&limit=${limit}`);
+export const getLeads = (page = 1, limit = 50, niche = '', date = '') => {
+  let url = `/api/leads?page=${page}&limit=${limit}`;
+  if (niche) url += `&niche=${encodeURIComponent(niche)}`;
+  if (date) url += `&date=${encodeURIComponent(date)}`;
+  return request(url);
+};
+export const getLeadFilters = () => request('/api/leads/filters');
 export const addLead = (data) =>
   request('/api/leads', { method: 'POST', body: JSON.stringify(data) });
 export const bulkAddLeads = (leads) =>
