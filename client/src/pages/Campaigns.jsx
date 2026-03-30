@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Play, Pause, Square, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import {
+  Play, Pause, Square, ChevronDown, ChevronUp, Search, X,
+  MailCheck, Timer, ToggleLeft, ToggleRight, Globe, RefreshCw,
+} from 'lucide-react';
 import {
   getCampaigns, createCampaign, launchCampaign, pauseCampaign, stopCampaign,
-  getCampaignLeads, getTemplates, getLeads,
+  getCampaignLeads, getTemplates, getLeads, markLeadReplied,
 } from '../api';
 
 function StatusBadge({ status }) {
@@ -14,6 +17,7 @@ function StatusBadge({ status }) {
     pending: 'bg-gray-500/20 text-gray-400',
     sent: 'bg-green-500/20 text-green-400',
     failed: 'bg-red-500/20 text-red-400',
+    replied: 'bg-blue-500/20 text-blue-400',
   };
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${styles[status] || styles.draft}`}>
@@ -35,6 +39,15 @@ export default function Campaigns() {
     template_id: '',
     delay_min: 30,
     delay_max: 90,
+    // Follow-up settings
+    followup_enabled: false,
+    followup1_delay_days: 3,
+    followup1_template_id: '',
+    followup2_delay_days: 7,
+    followup2_template_id: '',
+    // Auto-scrape settings
+    auto_scrape_enabled: false,
+    auto_scrape_query: '',
   });
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
   const [leadFilter, setLeadFilter] = useState('');
@@ -63,8 +76,20 @@ export default function Campaigns() {
         lead_ids: selectedLeadIds,
         delay_min: form.delay_min,
         delay_max: form.delay_max,
+        followup_enabled: form.followup_enabled,
+        followup1_delay_days: form.followup1_delay_days,
+        followup1_template_id: form.followup1_template_id || null,
+        followup2_delay_days: form.followup2_delay_days,
+        followup2_template_id: form.followup2_template_id || null,
+        auto_scrape_enabled: form.auto_scrape_enabled,
+        auto_scrape_query: form.auto_scrape_query || null,
       });
-      setForm({ name: '', template_id: '', delay_min: 30, delay_max: 90 });
+      setForm({
+        name: '', template_id: '', delay_min: 30, delay_max: 90,
+        followup_enabled: false, followup1_delay_days: 3, followup1_template_id: '',
+        followup2_delay_days: 7, followup2_template_id: '',
+        auto_scrape_enabled: false, auto_scrape_query: '',
+      });
       setSelectedLeadIds([]);
       fetchAll();
     } catch (err) {
@@ -91,6 +116,17 @@ export default function Campaigns() {
   const handlePause = async (id) => { await pauseCampaign(id); fetchAll(); };
   const handleStop = async (id) => { await stopCampaign(id); fetchAll(); };
 
+  const handleMarkReplied = async (campaignId, leadId) => {
+    try {
+      await markLeadReplied(campaignId, leadId);
+      // Refresh expanded leads
+      const data = await getCampaignLeads(campaignId);
+      setExpandedLeads(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const availableLeads = allLeads.filter(
     (l) =>
       !selectedLeadIds.includes(l.id) &&
@@ -108,11 +144,11 @@ export default function Campaigns() {
 
       {/* ── New Campaign Form ───────────────────────────── */}
       <div className="glass-card p-5 mb-8">
-        <h3 className="text-sm font-semibold text-muted mb-4 uppercase tracking-wider">New Campaign</h3>
+        <h3 className="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">New Campaign</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="block text-xs text-muted mb-1.5">Campaign Name</label>
+            <label className="block text-xs text-gray-500 mb-1.5">Campaign Name</label>
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -121,7 +157,7 @@ export default function Campaigns() {
             />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1.5">Template</label>
+            <label className="block text-xs text-gray-500 mb-1.5">Template</label>
             <select
               value={form.template_id}
               onChange={(e) => setForm({ ...form, template_id: e.target.value })}
@@ -136,12 +172,12 @@ export default function Campaigns() {
         </div>
 
         {/* Lead selector */}
-        <label className="block text-xs text-muted mb-1.5">Select Leads</label>
+        <label className="block text-xs text-gray-500 mb-1.5">Select Leads</label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
           {/* Available */}
           <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden">
             <div className="px-3 py-2 border-b border-[#1e1e1e] flex items-center gap-2">
-              <Search size={13} className="text-muted" />
+              <Search size={13} className="text-gray-500" />
               <input
                 value={leadFilter}
                 onChange={(e) => setLeadFilter(e.target.value)}
@@ -151,7 +187,7 @@ export default function Campaigns() {
             </div>
             <div className="max-h-40 overflow-y-auto">
               {availableLeads.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-muted text-center">No leads available</p>
+                <p className="px-3 py-4 text-xs text-gray-500 text-center">No leads available</p>
               ) : (
                 availableLeads.map((l) => (
                   <button
@@ -170,11 +206,11 @@ export default function Campaigns() {
           {/* Selected */}
           <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden">
             <div className="px-3 py-2 border-b border-[#1e1e1e]">
-              <p className="text-xs text-muted">{selectedLeadIds.length} selected</p>
+              <p className="text-xs text-gray-500">{selectedLeadIds.length} selected</p>
             </div>
             <div className="max-h-40 overflow-y-auto">
               {selectedLeads.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-muted text-center">Click leads on the left to add</p>
+                <p className="px-3 py-4 text-xs text-gray-500 text-center">Click leads on the left to add</p>
               ) : (
                 selectedLeads.map((l) => (
                   <div
@@ -195,7 +231,7 @@ export default function Campaigns() {
         {/* Delay settings */}
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="block text-xs text-muted mb-1.5">Min Delay (seconds): {form.delay_min}s</label>
+            <label className="block text-xs text-gray-500 mb-1.5">Min Delay (seconds): {form.delay_min}s</label>
             <input
               type="range"
               min="5"
@@ -206,7 +242,7 @@ export default function Campaigns() {
             />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1.5">Max Delay (seconds): {form.delay_max}s</label>
+            <label className="block text-xs text-gray-500 mb-1.5">Max Delay (seconds): {form.delay_max}s</label>
             <input
               type="range"
               min="5"
@@ -216,6 +252,130 @@ export default function Campaigns() {
               className="w-full accent-amber-500"
             />
           </div>
+        </div>
+
+        {/* ── Follow-Up Settings ────────────────────────── */}
+        <div className="border border-[#1e1e1e] rounded-lg p-4 mb-4 bg-[#0d0d0d]">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Timer size={16} className="text-blue-400" />
+              <h4 className="text-sm font-semibold text-white">Follow-Up Settings</h4>
+            </div>
+            <button
+              onClick={() => setForm({ ...form, followup_enabled: !form.followup_enabled })}
+              className="flex items-center gap-1.5 text-xs"
+            >
+              {form.followup_enabled ? (
+                <ToggleRight size={22} className="text-blue-400" />
+              ) : (
+                <ToggleLeft size={22} className="text-gray-600" />
+              )}
+              <span className={form.followup_enabled ? 'text-blue-400' : 'text-gray-600'}>
+                {form.followup_enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </button>
+          </div>
+
+          {form.followup_enabled && (
+            <div className="space-y-4 animate-fade-in">
+              {/* Follow-up 1 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1.5">
+                    Follow-Up 1 — Delay: <span className="text-blue-400">{form.followup1_delay_days} days</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="30"
+                    value={form.followup1_delay_days}
+                    onChange={(e) => setForm({ ...form, followup1_delay_days: parseInt(e.target.value) })}
+                    className="w-full accent-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1.5">Follow-Up 1 — Template</label>
+                  <select
+                    value={form.followup1_template_id}
+                    onChange={(e) => setForm({ ...form, followup1_template_id: e.target.value })}
+                    className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white"
+                  >
+                    <option value="">Select template…</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Follow-up 2 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1.5">
+                    Follow-Up 2 — Delay: <span className="text-blue-400">{form.followup2_delay_days} days</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="30"
+                    value={form.followup2_delay_days}
+                    onChange={(e) => setForm({ ...form, followup2_delay_days: parseInt(e.target.value) })}
+                    className="w-full accent-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1.5">Follow-Up 2 — Template</label>
+                  <select
+                    value={form.followup2_template_id}
+                    onChange={(e) => setForm({ ...form, followup2_template_id: e.target.value })}
+                    className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white"
+                  >
+                    <option value="">Select template…</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Auto-Scrape Settings ──────────────────────── */}
+        <div className="border border-[#1e1e1e] rounded-lg p-4 mb-5 bg-[#0d0d0d]">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Globe size={16} className="text-green-400" />
+              <h4 className="text-sm font-semibold text-white">Auto-Scrape (Daily)</h4>
+            </div>
+            <button
+              onClick={() => setForm({ ...form, auto_scrape_enabled: !form.auto_scrape_enabled })}
+              className="flex items-center gap-1.5 text-xs"
+            >
+              {form.auto_scrape_enabled ? (
+                <ToggleRight size={22} className="text-green-400" />
+              ) : (
+                <ToggleLeft size={22} className="text-gray-600" />
+              )}
+              <span className={form.auto_scrape_enabled ? 'text-green-400' : 'text-gray-600'}>
+                {form.auto_scrape_enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </button>
+          </div>
+
+          {form.auto_scrape_enabled && (
+            <div className="animate-fade-in">
+              <label className="block text-xs text-gray-500 mb-1.5">
+                Auto Scrape Query — runs daily at 8am UTC
+              </label>
+              <input
+                value={form.auto_scrape_query}
+                onChange={(e) => setForm({ ...form, auto_scrape_query: e.target.value })}
+                placeholder='e.g. "painters decorators Manchester"'
+                className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600"
+              />
+            </div>
+          )}
         </div>
 
         <button
@@ -230,7 +390,7 @@ export default function Campaigns() {
       {/* ── Campaign Cards ──────────────────────────────── */}
       <div className="space-y-4">
         {campaigns.length === 0 && (
-          <p className="text-muted text-sm text-center py-12">No campaigns yet. Create one above.</p>
+          <p className="text-gray-500 text-sm text-center py-12">No campaigns yet. Create one above.</p>
         )}
         {campaigns.map((c) => {
           const pct = c.total_leads > 0 ? Math.round(((c.sent_count + c.failed_count) / c.total_leads) * 100) : 0;
@@ -246,6 +406,16 @@ export default function Campaigns() {
                   <div className="flex items-center gap-3">
                     <h4 className="font-semibold text-white">{c.name}</h4>
                     <StatusBadge status={c.status} />
+                    {c.followup_enabled && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/20">
+                        Follow-ups
+                      </span>
+                    )}
+                    {c.auto_scrape_enabled && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-500/15 text-green-400 border border-green-500/20 flex items-center gap-1">
+                        <RefreshCw size={9} /> Auto-Scrape
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Actions */}
@@ -276,11 +446,11 @@ export default function Campaigns() {
                         <Square size={14} />
                       </button>
                     )}
-                    {isExpanded ? <ChevronUp size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}
+                    {isExpanded ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-6 text-xs text-muted mb-2">
+                <div className="flex items-center gap-6 text-xs text-gray-500 mb-2">
                   <span>Template: <span className="text-gray-300">{c.templates?.name || '—'}</span></span>
                   <span>Total: <span className="text-white">{c.total_leads}</span></span>
                   <span>Sent: <span className="text-green-400">{c.sent_count}</span></span>
@@ -299,27 +469,45 @@ export default function Campaigns() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="border-b border-[#1e1e1e] text-muted">
+                        <tr className="border-b border-[#1e1e1e] text-gray-500">
                           <th className="px-5 py-2.5 text-left font-medium">Lead Email</th>
                           <th className="px-5 py-2.5 text-left font-medium">Sender</th>
                           <th className="px-5 py-2.5 text-left font-medium">Status</th>
                           <th className="px-5 py-2.5 text-left font-medium">Sent At</th>
                           <th className="px-5 py-2.5 text-left font-medium">Error</th>
+                          <th className="px-5 py-2.5 text-left font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {expandedLeads.length === 0 ? (
-                          <tr><td colSpan={5} className="px-5 py-4 text-center text-muted">No leads</td></tr>
+                          <tr><td colSpan={6} className="px-5 py-4 text-center text-gray-500">No leads</td></tr>
                         ) : (
                           expandedLeads.map((cl) => (
                             <tr key={cl.id} className="border-b border-[#1e1e1e]">
                               <td className="px-5 py-2 text-white font-mono">{cl.leads?.email || '—'}</td>
-                              <td className="px-5 py-2 text-muted">{cl.accounts?.email || '—'}</td>
+                              <td className="px-5 py-2 text-gray-500">{cl.accounts?.email || '—'}</td>
                               <td className="px-5 py-2"><StatusBadge status={cl.status} /></td>
-                              <td className="px-5 py-2 text-muted">
+                              <td className="px-5 py-2 text-gray-500">
                                 {cl.sent_at ? new Date(cl.sent_at).toLocaleString() : '—'}
                               </td>
                               <td className="px-5 py-2 text-red-400 max-w-xs truncate">{cl.error || ''}</td>
+                              <td className="px-5 py-2">
+                                {cl.status === 'sent' && (
+                                  <button
+                                    onClick={() => handleMarkReplied(c.id, cl.lead_id)}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-colors"
+                                    title="Mark as replied — skips pending follow-ups"
+                                  >
+                                    <MailCheck size={11} />
+                                    Mark Replied
+                                  </button>
+                                )}
+                                {cl.status === 'replied' && (
+                                  <span className="text-[11px] text-blue-400 flex items-center gap-1">
+                                    <MailCheck size={11} /> Replied
+                                  </span>
+                                )}
+                              </td>
                             </tr>
                           ))
                         )}

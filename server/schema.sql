@@ -60,3 +60,10 @@ CREATE TABLE IF NOT EXISTS campaign_leads (
   sent_at       timestamptz,
   error         text
 );
+
+-- 6. Scraped URLs — tracks visited websites to prevent duplicate scraping
+CREATE TABLE IF NOT EXISTS scraped_urls (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  url         text UNIQUE NOT NULL,
+  scraped_at  timestamptz DEFAULT now()
+);

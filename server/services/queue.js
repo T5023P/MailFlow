@@ -1,5 +1,6 @@
 const supabase = require('../db');
 const { sendEmail, personalize } = require('./mailer');
+const { scheduleFollowUps } = require('./followups');
 
 // ── In-memory state ──────────────────────────────────
 let running = false;
@@ -139,6 +140,9 @@ async function sendLoop(campaignId) {
 
     // Update lead status
     await supabase.from('leads').update({ status: 'sent' }).eq('id', lead.id);
+
+    // Schedule follow-up emails
+    await scheduleFollowUps(campaignId, lead.id, new Date().toISOString());
   } else {
     // Mark as failed
     await supabase

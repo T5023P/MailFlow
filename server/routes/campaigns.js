@@ -16,7 +16,12 @@ router.get('/', async (req, res) => {
 
 // POST /api/campaigns — create campaign with round-robin lead assignment
 router.post('/', async (req, res) => {
-  const { name, template_id, lead_ids, delay_min, delay_max } = req.body;
+  const {
+    name, template_id, lead_ids, delay_min, delay_max,
+    followup_enabled, followup1_delay_days, followup1_template_id,
+    followup2_delay_days, followup2_template_id,
+    auto_scrape_query, auto_scrape_enabled,
+  } = req.body;
 
   if (!name || !template_id || !lead_ids || lead_ids.length === 0) {
     return res.status(400).json({ error: 'name, template_id, and lead_ids are required.' });
@@ -31,6 +36,13 @@ router.post('/', async (req, res) => {
       delay_min: delay_min || 30,
       delay_max: delay_max || 90,
       total_leads: lead_ids.length,
+      followup_enabled: followup_enabled || false,
+      followup1_delay_days: followup1_delay_days || 3,
+      followup1_template_id: followup1_template_id || null,
+      followup2_delay_days: followup2_delay_days || 7,
+      followup2_template_id: followup2_template_id || null,
+      auto_scrape_query: auto_scrape_query || null,
+      auto_scrape_enabled: auto_scrape_enabled || false,
     }])
     .select()
     .single();
@@ -98,6 +110,30 @@ router.get('/:id/leads', async (req, res) => {
     .select('*, leads(name, email, company, city), accounts(email)')
     .eq('campaign_id', req.params.id)
     .order('sent_at', { ascending: false, nullsFirst: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// PATCH /api/campaigns/:id — update campaign settings
+router.patch('/:id', async (req, res) => {
+  const allowed = [
+    'name', 'template_id', 'delay_min', 'delay_max',
+    'followup_enabled', 'followup1_delay_days', 'followup1_template_id',
+    'followup2_delay_days', 'followup2_template_id',
+    'auto_scrape_query', 'auto_scrape_enabled',
+  ];
+  const updates = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .update(updates)
+    .eq('id', req.params.id)
+    .select()
+    .single();
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);

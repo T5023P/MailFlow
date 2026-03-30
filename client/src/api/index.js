@@ -55,3 +55,16 @@ export const stopCampaign = (id) =>
   request(`/api/campaigns/${id}/stop`, { method: 'POST' });
 export const getCampaignLeads = (id) =>
   request(`/api/campaigns/${id}/leads`);
+export const updateCampaign = (id, data) =>
+  request(`/api/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const getCampaignFollowUps = (id) =>
+  request(`/api/campaigns/${id}/followups`);
+export const markLeadReplied = (campaignId, leadId) =>
+  request(`/api/campaigns/${campaignId}/leads/${leadId}/reply`, { method: 'POST' });
+
+// ── Scraper ──────────────────────────────────────────
+export const runScraper = (query, campaignId, sources) =>
+  request('/api/scraper/run', {
+    method: 'POST',
+    body: JSON.stringify({ query, campaign_id: campaignId || null, sources }),
+  });

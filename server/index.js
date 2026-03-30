@@ -8,6 +8,11 @@ const accountsRouter = require('./routes/accounts');
 const leadsRouter = require('./routes/leads');
 const templatesRouter = require('./routes/templates');
 const campaignsRouter = require('./routes/campaigns');
+const scraperRouter = require('./routes/scraper');
+const followupsRouter = require('./routes/followups');
+const cron = require('node-cron');
+const { processFollowUps } = require('./services/followups');
+const { initScheduler } = require('./services/scheduler');
 
 const app = express();
 
@@ -46,9 +51,20 @@ app.use('/api/accounts', accountsRouter);
 app.use('/api/leads', leadsRouter);
 app.use('/api/templates', templatesRouter);
 app.use('/api/campaigns', campaignsRouter);
+app.use('/api/scraper', scraperRouter);
+app.use('/api/campaigns', followupsRouter); // follow-up routes nested under /api/campaigns/:id/...
+
+// ── Cron Jobs ────────────────────────────────────────
+// Process follow-ups every hour
+cron.schedule('0 * * * *', () => {
+  console.log('[Cron] Hourly follow-up check...');
+  processFollowUps();
+});
 
 // ── Start server ─────────────────────────────────────
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✦ MailFlow server running on http://localhost:${PORT}`);
+  console.log('✦ Cron: Hourly follow-up processor active');
+  initScheduler();
 });

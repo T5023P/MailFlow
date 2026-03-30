@@ -5,6 +5,7 @@ import Accounts from './pages/Accounts';
 import Leads from './pages/Leads';
 import Templates from './pages/Templates';
 import Campaigns from './pages/Campaigns';
+import Scraper from './pages/Scraper';
 
 export default function App() {
   return (
@@ -15,7 +16,9 @@ export default function App() {
         <Route path="/leads" element={<Leads />} />
         <Route path="/templates" element={<Templates />} />
         <Route path="/campaigns" element={<Campaigns />} />
+        <Route path="/scraper" element={<Scraper />} />
       </Route>
     </Routes>
   );
 }
+

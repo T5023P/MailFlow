@@ -5,6 +5,7 @@ import {
   Users,
   FileText,
   Rocket,
+  Globe,
 } from 'lucide-react';
 
 const navItems = [
@@ -13,6 +14,7 @@ const navItems = [
   { to: '/leads', label: 'Leads', icon: Users },
   { to: '/templates', label: 'Templates', icon: FileText },
   { to: '/campaigns', label: 'Campaigns', icon: Rocket },
+  { to: '/scraper', label: 'Scraper', icon: Globe },
 ];
 
 export default function Layout() {
