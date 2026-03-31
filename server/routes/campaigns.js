@@ -5,13 +5,34 @@ const { startCampaign, pauseCampaign, stopCampaign } = require('../services/queu
 
 // GET /api/campaigns — list all with stats
 router.get('/', async (req, res) => {
-  const { data, error } = await supabase
-    .from('campaigns')
-    .select('*, templates(name)')
-    .order('created_at', { ascending: false });
+  try {
+    // Attempt join with templates first
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('*, templates(name)')
+      .order('created_at', { ascending: false });
 
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+    if (error) {
+      console.error('[Campaigns GET] Query error, attempting fallback:', error.message);
+      
+      // Fallback: Just get campaigns without join if templates join fails
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('campaigns')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (fallbackError) {
+        console.error('[Campaigns GET] Fallback failed:', fallbackError.message);
+        return res.status(500).json({ error: fallbackError.message });
+      }
+      return res.json(fallbackData);
+    }
+    
+    res.json(data);
+  } catch (err) {
+    console.error('[Campaigns GET] Critical Error:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
 // POST /api/campaigns — create campaign with round-robin lead assignment
