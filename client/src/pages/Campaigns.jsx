@@ -181,7 +181,10 @@ export default function Campaigns() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Campaigns</h2>
+      <div className="flex items-center gap-4 mb-6">
+        <h2 className="text-2xl font-bold">Campaigns</h2>
+        <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[10px] font-bold border border-amber-500/20">v2.1 - LEAD SELECTION UPDATED</span>
+      </div>
 
       {/* ── New Campaign Form ───────────────────────────── */}
       <div className="glass-card p-5 mb-8">
