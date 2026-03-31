@@ -33,6 +33,13 @@ export default function Campaigns() {
   const [expandedId, setExpandedId] = useState(null);
   const [expandedLeads, setExpandedLeads] = useState([]);
 
+  // Filters for Lead Selector
+  const [niches, setNiches] = useState([]);
+  const [dates, setDates] = useState([]);
+  const [selectedNiche, setSelectedNiche] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [filtersLoading, setFiltersLoading] = useState(false);
+
   // Form state
   const [form, setForm] = useState({
     name: '',
@@ -55,7 +62,12 @@ export default function Campaigns() {
 
   const fetchAll = async () => {
     try {
-      const [c, t, l] = await Promise.all([getCampaigns(), getTemplates(), getLeads(1, 500)]);
+      // Increase limit to 2000 to ensure "all" leads are available for selection
+      const [c, t, l] = await Promise.all([
+        getCampaigns(),
+        getTemplates(),
+        getLeads(1, 2000, selectedNiche, selectedDate)
+      ]);
       setCampaigns(c);
       setTemplates(t);
       setAllLeads(l.data);
@@ -64,7 +76,27 @@ export default function Campaigns() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  const fetchFilters = async () => {
+    setFiltersLoading(true);
+    try {
+      const { niches, dates } = await getLeadFilters();
+      setNiches(niches);
+      setDates(dates);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFiltersLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+    fetchFilters(); 
+    fetchAll(); 
+  }, []);
+
+  useEffect(() => {
+    fetchAll();
+  }, [selectedNiche, selectedDate]);
 
   const handleCreate = async () => {
     if (!form.name || !form.template_id || selectedLeadIds.length === 0) return;
@@ -138,6 +170,15 @@ export default function Campaigns() {
   const addLead = (id) => setSelectedLeadIds([...selectedLeadIds, id]);
   const removeLead = (id) => setSelectedLeadIds(selectedLeadIds.filter((x) => x !== id));
 
+  const selectAllFiltered = () => {
+    const filteredIds = availableLeads.map(l => l.id);
+    setSelectedLeadIds([...new Set([...selectedLeadIds, ...filteredIds])]);
+  };
+
+  const removeAllSelected = () => {
+    setSelectedLeadIds([]);
+  };
+
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">Campaigns</h2>
@@ -172,31 +213,67 @@ export default function Campaigns() {
         </div>
 
         {/* Lead selector */}
-        <label className="block text-xs text-gray-500 mb-1.5">Select Leads</label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-xs text-gray-500 font-semibold uppercase tracking-wider">Select Leads</label>
+          <div className="flex gap-4">
+            <select
+              value={selectedNiche}
+              onChange={(e) => setSelectedNiche(e.target.value)}
+              className="bg-[#0a0a0a] border border-[#1e1e1e] text-gray-400 text-[11px] rounded px-2 py-1 outline-none focus:border-amber-500/50 min-w-[120px]"
+            >
+              <option value="">All Niches</option>
+              {niches.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <select
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-[#0a0a0a] border border-[#1e1e1e] text-gray-400 text-[11px] rounded px-2 py-1 outline-none focus:border-amber-500/50 min-w-[100px]"
+            >
+              <option value="">All Dates</option>
+              {dates.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
           {/* Available */}
-          <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden">
-            <div className="px-3 py-2 border-b border-[#1e1e1e] flex items-center gap-2">
-              <Search size={13} className="text-gray-500" />
-              <input
-                value={leadFilter}
-                onChange={(e) => setLeadFilter(e.target.value)}
-                placeholder="Filter leads…"
-                className="bg-transparent text-xs text-white placeholder-gray-600 outline-none flex-1"
-              />
+          <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden flex flex-col">
+            <div className="px-3 py-2 border-b border-[#1e1e1e] flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-1">
+                <Search size={13} className="text-gray-500" />
+                <input
+                  value={leadFilter}
+                  onChange={(e) => setLeadFilter(e.target.value)}
+                  placeholder="Search available..."
+                  className="bg-transparent text-xs text-white placeholder-gray-600 outline-none flex-1"
+                />
+              </div>
+              {availableLeads.length > 0 && (
+                <button 
+                  onClick={selectAllFiltered}
+                  className="text-[10px] bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 px-2 py-0.5 rounded font-bold uppercase tracking-tight transition-colors"
+                >
+                  Select All ({availableLeads.length})
+                </button>
+              )}
             </div>
-            <div className="max-h-40 overflow-y-auto">
+            <div className="max-h-52 overflow-y-auto">
               {availableLeads.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-gray-500 text-center">No leads available</p>
+                <p className="px-3 py-4 text-xs text-gray-500 text-center">No leads found in this view</p>
               ) : (
                 availableLeads.map((l) => (
                   <button
                     key={l.id}
                     onClick={() => addLead(l.id)}
-                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-amber-500/10 hover:text-amber-400 transition-colors flex justify-between"
+                    className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-amber-500/10 hover:text-amber-400 transition-colors flex items-center gap-3 border-b border-white/[0.02]"
                   >
-                    <span className="truncate">{l.name || l.email}</span>
-                    <span className="text-gray-600 ml-2">{l.company || ''}</span>
+                    <div className="w-3.5 h-3.5 border border-gray-700 bg-black/40 rounded flex-shrink-0 flex items-center justify-center hover:border-amber-500/50 transition-colors">
+                      {/* Checkbox placeholder */}
+                    </div>
+                    <div className="flex-1 truncate">
+                      <p className="truncate text-white font-medium">{l.name || l.email}</p>
+                      <p className="text-[10px] text-gray-600 truncate">{l.company || ''}</p>
+                    </div>
                   </button>
                 ))
               )}
@@ -204,22 +281,40 @@ export default function Campaigns() {
           </div>
 
           {/* Selected */}
-          <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden">
-            <div className="px-3 py-2 border-b border-[#1e1e1e]">
-              <p className="text-xs text-gray-500">{selectedLeadIds.length} selected</p>
+          <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden flex flex-col">
+            <div className="px-3 py-2 border-b border-[#1e1e1e] flex justify-between items-center">
+              <p className="text-xs text-gray-500 font-semibold">{selectedLeadIds.length} Selected</p>
+              {selectedLeadIds.length > 0 && (
+                <button 
+                  onClick={removeAllSelected}
+                  className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase"
+                >
+                  Clear All
+                </button>
+              )}
             </div>
-            <div className="max-h-40 overflow-y-auto">
+            <div className="max-h-52 overflow-y-auto bg-amber-500/[0.02]">
               {selectedLeads.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-gray-500 text-center">Click leads on the left to add</p>
+                <p className="px-3 py-4 text-xs text-gray-500 text-center italic">Click leads on the left to add</p>
               ) : (
                 selectedLeads.map((l) => (
                   <div
                     key={l.id}
-                    className="w-full px-3 py-1.5 text-xs text-amber-400 flex items-center justify-between hover:bg-red-500/10 group"
+                    className="w-full px-3 py-2 text-xs text-amber-400 flex items-center justify-between hover:bg-red-500/10 group border-b border-amber-500/5 rotate-in"
                   >
-                    <span className="truncate">{l.name || l.email}</span>
-                    <button onClick={() => removeLead(l.id)} className="text-gray-600 group-hover:text-red-400">
-                      <X size={12} />
+                    <div className="flex items-center gap-3 truncate">
+                      <div className="w-3.5 h-3.5 bg-amber-500 rounded-sm flex-shrink-0 flex items-center justify-center">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                      </div>
+                      <div className="truncate">
+                        <p className="truncate font-medium">{l.name || l.email}</p>
+                        <p className="text-[10px] text-amber-500/40 truncate">{l.company || ''}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => removeLead(l.id)} className="text-gray-600 group-hover:text-red-400 p-1">
+                      <X size={14} />
                     </button>
                   </div>
                 ))
