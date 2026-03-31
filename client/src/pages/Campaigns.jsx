@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import {
   getCampaigns, createCampaign, launchCampaign, pauseCampaign, stopCampaign,
-  getCampaignLeads, getTemplates, getLeads, markLeadReplied,
+  getCampaignLeads, getTemplates, getLeads, markLeadReplied, getLeadFilters,
 } from '../api';
 
 function StatusBadge({ status }) {
