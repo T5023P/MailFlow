@@ -1,622 +1,190 @@
 import { useState, useEffect } from 'react';
-import {
-  Play, Pause, Square, ChevronDown, ChevronUp, Search, X,
-  MailCheck, Timer, ToggleLeft, ToggleRight, Globe, RefreshCw,
-} from 'lucide-react';
-import {
-  getCampaigns, createCampaign, launchCampaign, pauseCampaign, stopCampaign,
-  getCampaignLeads, getTemplates, getLeads, markLeadReplied, getLeadFilters,
-} from '../api';
-
-function StatusBadge({ status }) {
-  const styles = {
-    draft: 'bg-gray-500/20 text-gray-400',
-    running: 'bg-amber-500/20 text-amber-400 animate-pulse-amber',
-    paused: 'bg-yellow-500/20 text-yellow-400',
-    done: 'bg-green-500/20 text-green-400',
-    pending: 'bg-gray-500/20 text-gray-400',
-    sent: 'bg-green-500/20 text-green-400',
-    failed: 'bg-red-500/20 text-red-400',
-    replied: 'bg-blue-500/20 text-blue-400',
-  };
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${styles[status] || styles.draft}`}>
-      {status}
-    </span>
-  );
-}
+import { Play, Pause, Square, Plus, Loader2, Mail, CheckCircle2, X } from 'lucide-react';
+import { getCampaigns, createCampaign, launchCampaign, pauseCampaign, stopCampaign, getTemplates, getLeads } from '../api';
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState([]);
   const [templates, setTemplates] = useState([]);
-  const [allLeads, setAllLeads] = useState([]);
-  const [expandedId, setExpandedId] = useState(null);
-  const [expandedLeads, setExpandedLeads] = useState([]);
-
-  // Filters for Lead Selector
-  const [niches, setNiches] = useState([]);
-  const [dates, setDates] = useState([]);
-  const [selectedNiche, setSelectedNiche] = useState('');
-  const [selectedDate, setSelectedDate] = useState('');
-  const [filtersLoading, setFiltersLoading] = useState(false);
-
-  // Form state
-  const [form, setForm] = useState({
-    name: '',
-    template_id: '',
-    delay_min: 30,
-    delay_max: 90,
-    // Follow-up settings
-    followup_enabled: false,
-    followup1_delay_days: 3,
-    followup1_template_id: '',
-    followup2_delay_days: 7,
-    followup2_template_id: '',
-    // Auto-scrape settings
-    auto_scrape_enabled: false,
-    auto_scrape_query: '',
-  });
-  const [selectedLeadIds, setSelectedLeadIds] = useState([]);
-  const [leadFilter, setLeadFilter] = useState('');
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: '', template_id: '' });
   const [creating, setCreating] = useState(false);
 
-  const fetchAll = async (isManual = false) => {
+  const fetchData = async () => {
     try {
       const [c, t, l] = await Promise.all([
         getCampaigns(),
         getTemplates(),
-        getLeads(1, 2000, selectedNiche, selectedDate)
+        getLeads(1, 2000)
       ]);
       setCampaigns(c || []);
       setTemplates(t || []);
-      setAllLeads(l?.data || []);
-    } catch (e) {
-      console.error('Fetch error:', e);
-    }
-  };
-
-  const fetchFilters = async () => {
-    setFiltersLoading(true);
-    try {
-      const res = await getLeadFilters();
-      setNiches(res?.niches || []);
-      setDates(res?.dates || []);
-    } catch (e) {
-      console.error('Filter fetch error:', e);
+      setLeads(l?.data || []);
+    } catch (err) {
+      console.error('Fetch error:', err);
     } finally {
-      setFiltersLoading(false);
+      setLoading(false);
     }
   };
 
-  // Run on mount
   useEffect(() => {
-    fetchFilters();
+    fetchData();
   }, []);
 
-  // Run when filters change (including mount)
-  useEffect(() => {
-    fetchAll();
-  }, [selectedNiche, selectedDate]);
-
-  const handleCreate = async () => {
-    if (!form.name || !form.template_id || selectedLeadIds.length === 0) return;
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!form.name || !form.template_id || leads.length === 0) return;
     setCreating(true);
     try {
       await createCampaign({
         name: form.name,
         template_id: form.template_id,
-        lead_ids: selectedLeadIds,
-        delay_min: form.delay_min,
-        delay_max: form.delay_max,
-        followup_enabled: form.followup_enabled,
-        followup1_delay_days: form.followup1_delay_days,
-        followup1_template_id: form.followup1_template_id || null,
-        followup2_delay_days: form.followup2_delay_days,
-        followup2_template_id: form.followup2_template_id || null,
-        auto_scrape_enabled: form.auto_scrape_enabled,
-        auto_scrape_query: form.auto_scrape_query || null,
+        lead_ids: (leads || []).map(l => l.id),
       });
-      setForm({
-        name: '', template_id: '', delay_min: 30, delay_max: 90,
-        followup_enabled: false, followup1_delay_days: 3, followup1_template_id: '',
-        followup2_delay_days: 7, followup2_template_id: '',
-        auto_scrape_enabled: false, auto_scrape_query: '',
-      });
-      setSelectedLeadIds([]);
-      fetchAll();
+      setForm({ name: '', template_id: '' });
+      setShowForm(false);
+      fetchData();
     } catch (err) {
       console.error('Create error:', err);
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   };
 
-  const handleExpand = async (id) => {
-    if (expandedId === id) {
-      setExpandedId(null);
-      return;
-    }
-    setExpandedId(id);
+  const handleAction = async (id, action) => {
     try {
-      const data = await getCampaignLeads(id);
-      setExpandedLeads(data || []);
-    } catch (e) {
-      console.error('Expand error:', e);
+      if (action === 'launch') await launchCampaign(id);
+      if (action === 'pause') await pauseCampaign(id);
+      if (action === 'stop') await stopCampaign(id);
+      fetchData();
+    } catch (err) {
+      console.error('Action error:', err);
     }
-  };
-
-  const handleLaunch = async (id) => { try { await launchCampaign(id); fetchAll(); } catch(e){console.error(e);} };
-  const handlePause = async (id) => { try { await pauseCampaign(id); fetchAll(); } catch(e){console.error(e);} };
-  const handleStop = async (id) => { try { await stopCampaign(id); fetchAll(); } catch(e){console.error(e);} };
-
-  const handleMarkReplied = async (campaignId, leadId) => {
-    try {
-      await markLeadReplied(campaignId, leadId);
-      const data = await getCampaignLeads(campaignId);
-      setExpandedLeads(data || []);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const availableLeads = (allLeads || []).filter(
-    (l) =>
-      !selectedLeadIds.includes(l.id) &&
-      (l.name?.toLowerCase().includes(leadFilter.toLowerCase()) ||
-        l.email?.toLowerCase().includes(leadFilter.toLowerCase()))
-  );
-  const selectedLeads = (allLeads || []).filter((l) => selectedLeadIds.includes(l.id));
-
-  const addLead = (id) => setSelectedLeadIds([...selectedLeadIds, id]);
-  const removeLead = (id) => setSelectedLeadIds(selectedLeadIds.filter((x) => x !== id));
-
-  const selectAllFiltered = () => {
-    const filteredIds = availableLeads.map(l => l.id);
-    setSelectedLeadIds([...new Set([...selectedLeadIds, ...filteredIds])]);
-  };
-
-  const removeAllSelected = () => {
-    setSelectedLeadIds([]);
   };
 
   return (
-    <div className="animate-fade-in">
-      <h2 className="text-2xl font-bold mb-6">Campaigns</h2>
-
-      {/* ── New Campaign Form ───────────────────────────── */}
-      <div className="glass-card p-5 mb-8">
-        <h3 className="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">New Campaign</h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1.5">Campaign Name</label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. Q1 Outreach"
-              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-amber-500/50 outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1.5">Template</label>
-            <select
-              value={form.template_id}
-              onChange={(e) => setForm({ ...form, template_id: e.target.value })}
-              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white focus:border-amber-500/50 outline-none cursor-pointer"
-            >
-              <option value="">Select a template…</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
+    <div className="animate-fade-in p-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-3xl font-bold text-white tracking-tight">Campaigns</h2>
+          <p className="text-gray-500 text-sm mt-1">Manage and monitor your outreach performance</p>
         </div>
-
-        {/* Lead selector */}
-        <div className="flex items-center justify-between mb-2">
-          <label className="block text-xs text-gray-500 font-semibold uppercase tracking-wider">Select Leads</label>
-          <div className="flex gap-4">
-            <select
-              value={selectedNiche}
-              onChange={(e) => setSelectedNiche(e.target.value)}
-              className="bg-[#0a0a0a] border border-[#1e1e1e] text-gray-400 text-[11px] rounded px-2 py-1 outline-none focus:border-amber-500/50 min-w-[120px]"
-            >
-              <option value="">All Niches</option>
-              {niches.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <select
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-[#0a0a0a] border border-[#1e1e1e] text-gray-400 text-[11px] rounded px-2 py-1 outline-none focus:border-amber-500/50 min-w-[100px]"
-            >
-              <option value="">All Dates</option>
-              {dates.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-          {/* Available */}
-          <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden flex flex-col">
-            <div className="px-3 py-2 border-b border-[#1e1e1e] flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 flex-1">
-                <Search size={13} className="text-gray-500" />
-                <input
-                  value={leadFilter}
-                  onChange={(e) => setLeadFilter(e.target.value)}
-                  placeholder="Search available..."
-                  className="bg-transparent text-xs text-white placeholder-gray-600 outline-none flex-1"
-                />
-              </div>
-              {availableLeads.length > 0 && (
-                <button 
-                  onClick={selectAllFiltered}
-                  className="text-[10px] bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 px-2 py-0.5 rounded font-bold uppercase tracking-tight transition-colors"
-                >
-                  Select All ({availableLeads.length})
-                </button>
-              )}
-            </div>
-            <div className="max-h-52 overflow-y-auto">
-              {availableLeads.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-gray-500 text-center">No leads found in this view</p>
-              ) : (
-                availableLeads.map((l) => (
-                  <button
-                    key={l.id}
-                    onClick={() => addLead(l.id)}
-                    className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-amber-500/10 hover:text-amber-400 transition-colors flex items-center gap-3 border-b border-white/[0.02]"
-                  >
-                    <div className="w-3.5 h-3.5 border border-gray-700 bg-black/40 rounded flex-shrink-0 flex items-center justify-center hover:border-amber-500/50 transition-colors">
-                      <div className="w-1.5 h-1.5 rounded-full bg-gray-800" />
-                    </div>
-                    <div className="flex-1 truncate">
-                      <p className="truncate text-white font-medium">{l.name || l.email}</p>
-                      <p className="text-[10px] text-gray-600 truncate">{l.company || ''}</p>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Selected */}
-          <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden flex flex-col">
-            <div className="px-3 py-2 border-b border-[#1e1e1e] flex justify-between items-center">
-              <p className="text-xs text-gray-500 font-semibold">{selectedLeadIds.length} Selected</p>
-              {selectedLeadIds.length > 0 && (
-                <button 
-                  onClick={removeAllSelected}
-                  className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase"
-                >
-                  Clear All
-                </button>
-              )}
-            </div>
-            <div className="max-h-52 overflow-y-auto bg-amber-500/[0.02]">
-              {selectedLeads.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-gray-500 text-center italic">Click leads on the left to add</p>
-              ) : (
-                selectedLeads.map((l) => (
-                  <div
-                    key={l.id}
-                    className="w-full px-3 py-2 text-xs text-amber-400 flex items-center justify-between hover:bg-red-500/10 group border-b border-amber-500/5"
-                  >
-                    <div className="flex items-center gap-3 truncate">
-                      <div className="w-3.5 h-3.5 bg-amber-500 rounded-sm flex-shrink-0 flex items-center justify-center">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                      </div>
-                      <div className="truncate">
-                        <p className="truncate font-medium">{l.name || l.email}</p>
-                        <p className="text-[10px] text-amber-500/40 truncate">{l.company || ''}</p>
-                      </div>
-                    </div>
-                    <button onClick={() => removeLead(l.id)} className="text-gray-600 group-hover:text-red-400 p-1">
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Delay settings */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1.5">Min Delay (seconds): {form.delay_min}s</label>
-            <input
-              type="range"
-              min="5"
-              max="300"
-              value={form.delay_min}
-              onChange={(e) => setForm({ ...form, delay_min: parseInt(e.target.value) })}
-              className="w-full accent-amber-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1.5">Max Delay (seconds): {form.delay_max}s</label>
-            <input
-              type="range"
-              min="5"
-              max="600"
-              value={form.delay_max}
-              onChange={(e) => setForm({ ...form, delay_max: parseInt(e.target.value) })}
-              className="w-full accent-amber-500"
-            />
-          </div>
-        </div>
-
-        {/* ── Follow-Up Settings ────────────────────────── */}
-        <div className="border border-[#1e1e1e] rounded-lg p-4 mb-4 bg-[#0d0d0d]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Timer size={16} className="text-blue-400" />
-              <h4 className="text-sm font-semibold text-white">Follow-Up Settings</h4>
-            </div>
-            <button
-              onClick={() => setForm({ ...form, followup_enabled: !form.followup_enabled })}
-              className="flex items-center gap-1.5 text-xs"
-            >
-              {form.followup_enabled ? (
-                <ToggleRight size={22} className="text-blue-400" />
-              ) : (
-                <ToggleLeft size={22} className="text-gray-600" />
-              )}
-              <span className={form.followup_enabled ? 'text-blue-400' : 'text-gray-600'}>
-                {form.followup_enabled ? 'Enabled' : 'Disabled'}
-              </span>
-            </button>
-          </div>
-
-          {form.followup_enabled && (
-            <div className="space-y-4">
-              {/* Follow-up 1 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">
-                    Follow-Up 1 — Delay: <span className="text-blue-400">{form.followup1_delay_days} days</span>
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="30"
-                    value={form.followup1_delay_days}
-                    onChange={(e) => setForm({ ...form, followup1_delay_days: parseInt(e.target.value) })}
-                    className="w-full accent-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">Follow-Up 1 — Template</label>
-                  <select
-                    value={form.followup1_template_id}
-                    onChange={(e) => setForm({ ...form, followup1_template_id: e.target.value })}
-                    className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white"
-                  >
-                    <option value="">Select template…</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Follow-up 2 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">
-                    Follow-Up 2 — Delay: <span className="text-blue-400">{form.followup2_delay_days} days</span>
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="30"
-                    value={form.followup2_delay_days}
-                    onChange={(e) => setForm({ ...form, followup2_delay_days: parseInt(e.target.value) })}
-                    className="w-full accent-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">Follow-Up 2 — Template</label>
-                  <select
-                    value={form.followup2_template_id}
-                    onChange={(e) => setForm({ ...form, followup2_template_id: e.target.value })}
-                    className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white"
-                  >
-                    <option value="">Select template…</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Auto-Scrape Settings ──────────────────────── */}
-        <div className="border border-[#1e1e1e] rounded-lg p-4 mb-5 bg-[#0d0d0d]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Globe size={16} className="text-green-400" />
-              <h4 className="text-sm font-semibold text-white">Auto-Scrape (Daily)</h4>
-            </div>
-            <button
-              onClick={() => setForm({ ...form, auto_scrape_enabled: !form.auto_scrape_enabled })}
-              className="flex items-center gap-1.5 text-xs"
-            >
-              {form.auto_scrape_enabled ? (
-                <ToggleRight size={22} className="text-green-400" />
-              ) : (
-                <ToggleLeft size={22} className="text-gray-600" />
-              )}
-              <span className={form.auto_scrape_enabled ? 'text-green-400' : 'text-gray-600'}>
-                {form.auto_scrape_enabled ? 'Enabled' : 'Disabled'}
-              </span>
-            </button>
-          </div>
-
-          {form.auto_scrape_enabled && (
-            <div>
-              <label className="block text-xs text-gray-500 mb-1.5">
-                Auto Scrape Query — runs daily at 8am UTC
-              </label>
-              <input
-                value={form.auto_scrape_query}
-                onChange={(e) => setForm({ ...form, auto_scrape_query: e.target.value })}
-                placeholder='e.g. "painters decorators Manchester"'
-                className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600"
-              />
-            </div>
-          )}
-        </div>
-
         <button
-          onClick={handleCreate}
-          disabled={creating || !form.name || !form.template_id || selectedLeadIds.length === 0}
-          className="px-5 py-2 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 text-sm transition-all"
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20"
         >
-          {creating ? 'Creating…' : 'Create Campaign'}
+          {showForm ? <X size={18} /> : <Plus size={18} />}
+          {showForm ? 'Cancel' : 'New Campaign'}
         </button>
       </div>
 
-      {/* ── Campaign Cards ──────────────────────────────── */}
-      <div className="space-y-4">
-        {campaigns.length === 0 && (
-          <div className="glass-card p-12 text-center text-gray-500">
-            <RefreshCw size={32} className="mx-auto mb-3 opacity-20" />
-            <p className="text-sm">No campaigns yet. Design your outreach above.</p>
-          </div>
-        )}
-        {campaigns.map((c) => {
-          const pct = c.total_leads > 0 ? Math.round(((c.sent_count + c.failed_count) / c.total_leads) * 100) : 0;
-          const isExpanded = expandedId === c.id;
-          return (
-            <div key={c.id} className="glass-card overflow-hidden">
-              {/* Card header */}
-              <div
-                className="p-5 cursor-pointer hover:bg-white/[0.02] transition-colors"
-                onClick={() => handleExpand(c.id)}
+      {/* New Campaign Form */}
+      {showForm && (
+        <div className="glass-card p-6 mb-8 border-amber-500/30 bg-amber-500/5 animate-slide-in">
+          <h3 className="text-lg font-bold text-white mb-4">Create New Campaign</h3>
+          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+            <div className="md:col-span-1">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Campaign Name</label>
+              <input
+                required
+                value={form.name}
+                onChange={e => setForm({...form, name: e.target.value})}
+                placeholder="e.g. Q1 Outreach"
+                className="w-full bg-black border border-gray-800 rounded-lg px-4 py-3 text-sm text-white focus:border-amber-500 outline-none"
+              />
+            </div>
+            <div className="md:col-span-1">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Template</label>
+              <select
+                required
+                value={form.template_id}
+                onChange={e => setForm({...form, template_id: e.target.value})}
+                className="w-full bg-black border border-gray-800 rounded-lg px-4 py-3 text-sm text-white focus:border-amber-500 outline-none cursor-pointer appearance-none"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <h4 className="font-semibold text-white">{c.name}</h4>
-                    <StatusBadge status={c.status} />
-                    {c.followup_enabled && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/20">
-                        Follow-ups
-                      </span>
-                    )}
-                    {c.auto_scrape_enabled && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-500/15 text-green-400 border border-green-500/20 flex items-center gap-1">
-                        <RefreshCw size={9} /> Auto-Scrape
-                      </span>
-                    )}
+                <option value="">Select a template...</option>
+                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+            <div className="md:col-span-1">
+              <button
+                type="submit"
+                disabled={creating || (leads || []).length === 0}
+                className="w-full py-3 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition-all shadow-lg"
+              >
+                {creating ? <Loader2 className="animate-spin mx-auto" /> : `Create with ${leads?.length || 0} Leads`}
+              </button>
+            </div>
+          </form>
+          {(leads || []).length === 0 && !loading && (
+            <p className="mt-3 text-red-500 text-xs font-medium">Please add some leads first to create a campaign.</p>
+          )}
+        </div>
+      )}
+
+      {/* Campaign List */}
+      {loading ? (
+        <div className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-amber-500" size={32} /></div>
+      ) : (
+        <div className="grid gap-4">
+          {(campaigns || []).length === 0 ? (
+            <div className="glass-card p-12 text-center text-gray-500 bg-white/5 border-dashed border-gray-800">
+              <Mail className="mx-auto mb-4 opacity-10" size={48} />
+              <p>No campaigns yet. Click "New Campaign" to begin.</p>
+            </div>
+          ) : (
+            campaigns.map(c => (
+              <div key={c.id} className="glass-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:bg-white/[0.02]">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h4 className="text-xl font-bold text-white tracking-wide">{c.name}</h4>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      c.status === 'running' ? 'bg-green-500/10 text-green-500' :
+                      c.status === 'paused' ? 'bg-yellow-500/10 text-yellow-500' :
+                      'bg-gray-800 text-gray-400'
+                    }`}>
+                      {c.status}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {/* Actions */}
-                    {(c.status === 'draft' || c.status === 'paused') && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleLaunch(c.id); }}
-                        className="p-2 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-all"
-                        title="Launch"
-                      >
-                        <Play size={14} />
-                      </button>
-                    )}
-                    {c.status === 'running' && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handlePause(c.id); }}
-                        className="p-2 rounded-lg bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 transition-all"
-                        title="Pause"
-                      >
-                        <Pause size={14} />
-                      </button>
-                    )}
-                    {(c.status === 'running' || c.status === 'paused') && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleStop(c.id); }}
-                        className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all"
-                        title="Stop"
-                      >
-                        <Square size={14} />
-                      </button>
-                    )}
-                    {isExpanded ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
+                  <div className="flex items-center gap-6 text-[11px] text-gray-500 font-medium font-mono uppercase">
+                    <div className="flex items-center gap-1.5"><CheckCircle2 size={12} className="text-gray-400" /> {c.total_leads} Leads</div>
+                    <div>Sent: <span className="text-amber-500">{c.sent_count}</span></div>
+                    <div>Template: <span className="text-gray-300">{c.templates?.name || '—'}</span></div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-6 text-xs text-gray-500 mb-2">
-                  <span>Template: <span className="text-gray-300">{c.templates?.name || '—'}</span></span>
-                  <span>Total: <span className="text-white">{c.total_leads}</span></span>
-                  <span>Sent: <span className="text-green-400">{c.sent_count}</span></span>
-                  <span>Failed: <span className="text-red-400">{c.failed_count}</span></span>
-                  <span>{new Date(c.created_at).toLocaleDateString()}</span>
-                </div>
-
-                <div className="progress-bar">
-                  <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+                <div className="flex items-center gap-2">
+                  {(c.status === 'draft' || c.status === 'paused') && (
+                    <button
+                      onClick={() => handleAction(c.id, 'launch')}
+                      className="p-3 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors"
+                      title="Launch"
+                    >
+                      <Play size={18} />
+                    </button>
+                  )}
+                  {c.status === 'running' && (
+                    <button
+                      onClick={() => handleAction(c.id, 'pause')}
+                      className="p-3 rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-colors"
+                      title="Pause"
+                    >
+                      <Pause size={18} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleAction(c.id, 'stop')}
+                    className="p-3 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                    title="Stop"
+                  >
+                    <Square size={18} />
+                  </button>
                 </div>
               </div>
-
-              {/* Expanded details */}
-              {isExpanded && (
-                <div className="border-t border-[#1e1e1e]">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-[#1e1e1e] text-gray-500">
-                          <th className="px-5 py-2.5 text-left font-medium">Lead Email</th>
-                          <th className="px-5 py-2.5 text-left font-medium">Sender</th>
-                          <th className="px-5 py-2.5 text-left font-medium">Status</th>
-                          <th className="px-5 py-2.5 text-left font-medium">Sent At</th>
-                          <th className="px-5 py-2.5 text-left font-medium">Error</th>
-                          <th className="px-5 py-2.5 text-left font-medium">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(expandedLeads || []).length === 0 ? (
-                          <tr><td colSpan={6} className="px-5 py-4 text-center text-gray-500">No leads processed yet</td></tr>
-                        ) : (
-                          expandedLeads.map((cl) => (
-                            <tr key={cl.id} className="border-b border-[#1e1e1e]">
-                              <td className="px-5 py-2 text-white font-mono">{cl.leads?.email || '—'}</td>
-                              <td className="px-5 py-2 text-gray-500">{cl.accounts?.email || '—'}</td>
-                              <td className="px-5 py-2"><StatusBadge status={cl.status} /></td>
-                              <td className="px-5 py-2 text-gray-500">
-                                {cl.sent_at ? new Date(cl.sent_at).toLocaleString() : '—'}
-                              </td>
-                              <td className="px-5 py-2 text-red-400 max-w-xs truncate">{cl.error || ''}</td>
-                              <td className="px-5 py-2">
-                                {cl.status === 'sent' && (
-                                  <button
-                                    onClick={() => handleMarkReplied(c.id, cl.lead_id)}
-                                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-colors"
-                                    title="Mark as replied"
-                                  >
-                                    <MailCheck size={11} />
-                                    Mark Replied
-                                  </button>
-                                )}
-                                {cl.status === 'replied' && (
-                                  <span className="text-[11px] text-blue-400 flex items-center gap-1">
-                                    <MailCheck size={11} /> Replied
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
