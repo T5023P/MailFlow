@@ -60,40 +60,40 @@ export default function Campaigns() {
   const [leadFilter, setLeadFilter] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const fetchAll = async () => {
+  const fetchAll = async (isManual = false) => {
     try {
-      // Increase limit to 2000 to ensure "all" leads are available for selection
       const [c, t, l] = await Promise.all([
         getCampaigns(),
         getTemplates(),
         getLeads(1, 2000, selectedNiche, selectedDate)
       ]);
-      setCampaigns(c);
-      setTemplates(t);
-      setAllLeads(l.data);
+      setCampaigns(c || []);
+      setTemplates(t || []);
+      setAllLeads(l?.data || []);
     } catch (e) {
-      console.error(e);
+      console.error('Fetch error:', e);
     }
   };
 
   const fetchFilters = async () => {
     setFiltersLoading(true);
     try {
-      const { niches, dates } = await getLeadFilters();
-      setNiches(niches);
-      setDates(dates);
+      const res = await getLeadFilters();
+      setNiches(res?.niches || []);
+      setDates(res?.dates || []);
     } catch (e) {
-      console.error(e);
+      console.error('Filter fetch error:', e);
     } finally {
       setFiltersLoading(false);
     }
   };
 
-  useEffect(() => { 
-    fetchFilters(); 
-    fetchAll(); 
+  // Run on mount
+  useEffect(() => {
+    fetchFilters();
   }, []);
 
+  // Run when filters change (including mount)
   useEffect(() => {
     fetchAll();
   }, [selectedNiche, selectedDate]);
@@ -125,7 +125,7 @@ export default function Campaigns() {
       setSelectedLeadIds([]);
       fetchAll();
     } catch (err) {
-      console.error(err);
+      console.error('Create error:', err);
     }
     setCreating(false);
   };
@@ -138,34 +138,33 @@ export default function Campaigns() {
     setExpandedId(id);
     try {
       const data = await getCampaignLeads(id);
-      setExpandedLeads(data);
+      setExpandedLeads(data || []);
     } catch (e) {
-      console.error(e);
+      console.error('Expand error:', e);
     }
   };
 
-  const handleLaunch = async (id) => { await launchCampaign(id); fetchAll(); };
-  const handlePause = async (id) => { await pauseCampaign(id); fetchAll(); };
-  const handleStop = async (id) => { await stopCampaign(id); fetchAll(); };
+  const handleLaunch = async (id) => { try { await launchCampaign(id); fetchAll(); } catch(e){console.error(e);} };
+  const handlePause = async (id) => { try { await pauseCampaign(id); fetchAll(); } catch(e){console.error(e);} };
+  const handleStop = async (id) => { try { await stopCampaign(id); fetchAll(); } catch(e){console.error(e);} };
 
   const handleMarkReplied = async (campaignId, leadId) => {
     try {
       await markLeadReplied(campaignId, leadId);
-      // Refresh expanded leads
       const data = await getCampaignLeads(campaignId);
-      setExpandedLeads(data);
+      setExpandedLeads(data || []);
     } catch (e) {
       console.error(e);
     }
   };
 
-  const availableLeads = allLeads.filter(
+  const availableLeads = (allLeads || []).filter(
     (l) =>
       !selectedLeadIds.includes(l.id) &&
       (l.name?.toLowerCase().includes(leadFilter.toLowerCase()) ||
         l.email?.toLowerCase().includes(leadFilter.toLowerCase()))
   );
-  const selectedLeads = allLeads.filter((l) => selectedLeadIds.includes(l.id));
+  const selectedLeads = (allLeads || []).filter((l) => selectedLeadIds.includes(l.id));
 
   const addLead = (id) => setSelectedLeadIds([...selectedLeadIds, id]);
   const removeLead = (id) => setSelectedLeadIds(selectedLeadIds.filter((x) => x !== id));
@@ -180,11 +179,8 @@ export default function Campaigns() {
   };
 
   return (
-    <div>
-      <div className="flex items-center gap-4 mb-6">
-        <h2 className="text-2xl font-bold">Campaigns</h2>
-        <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[10px] font-bold border border-amber-500/20">v2.1 - LEAD SELECTION UPDATED</span>
-      </div>
+    <div className="animate-fade-in">
+      <h2 className="text-2xl font-bold mb-6">Campaigns</h2>
 
       {/* ── New Campaign Form ───────────────────────────── */}
       <div className="glass-card p-5 mb-8">
@@ -197,7 +193,7 @@ export default function Campaigns() {
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="e.g. Q1 Outreach"
-              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600"
+              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-amber-500/50 outline-none"
             />
           </div>
           <div>
@@ -205,7 +201,7 @@ export default function Campaigns() {
             <select
               value={form.template_id}
               onChange={(e) => setForm({ ...form, template_id: e.target.value })}
-              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white"
+              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg px-3 py-2 text-sm text-white focus:border-amber-500/50 outline-none cursor-pointer"
             >
               <option value="">Select a template…</option>
               {templates.map((t) => (
@@ -271,7 +267,7 @@ export default function Campaigns() {
                     className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-amber-500/10 hover:text-amber-400 transition-colors flex items-center gap-3 border-b border-white/[0.02]"
                   >
                     <div className="w-3.5 h-3.5 border border-gray-700 bg-black/40 rounded flex-shrink-0 flex items-center justify-center hover:border-amber-500/50 transition-colors">
-                      {/* Checkbox placeholder */}
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-800" />
                     </div>
                     <div className="flex-1 truncate">
                       <p className="truncate text-white font-medium">{l.name || l.email}</p>
@@ -303,7 +299,7 @@ export default function Campaigns() {
                 selectedLeads.map((l) => (
                   <div
                     key={l.id}
-                    className="w-full px-3 py-2 text-xs text-amber-400 flex items-center justify-between hover:bg-red-500/10 group border-b border-amber-500/5 rotate-in"
+                    className="w-full px-3 py-2 text-xs text-amber-400 flex items-center justify-between hover:bg-red-500/10 group border-b border-amber-500/5"
                   >
                     <div className="flex items-center gap-3 truncate">
                       <div className="w-3.5 h-3.5 bg-amber-500 rounded-sm flex-shrink-0 flex items-center justify-center">
@@ -375,7 +371,7 @@ export default function Campaigns() {
           </div>
 
           {form.followup_enabled && (
-            <div className="space-y-4 animate-fade-in">
+            <div className="space-y-4">
               {/* Follow-up 1 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
@@ -462,7 +458,7 @@ export default function Campaigns() {
           </div>
 
           {form.auto_scrape_enabled && (
-            <div className="animate-fade-in">
+            <div>
               <label className="block text-xs text-gray-500 mb-1.5">
                 Auto Scrape Query — runs daily at 8am UTC
               </label>
@@ -479,7 +475,7 @@ export default function Campaigns() {
         <button
           onClick={handleCreate}
           disabled={creating || !form.name || !form.template_id || selectedLeadIds.length === 0}
-          className="px-5 py-2 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 text-sm"
+          className="px-5 py-2 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 text-sm transition-all"
         >
           {creating ? 'Creating…' : 'Create Campaign'}
         </button>
@@ -488,13 +484,16 @@ export default function Campaigns() {
       {/* ── Campaign Cards ──────────────────────────────── */}
       <div className="space-y-4">
         {campaigns.length === 0 && (
-          <p className="text-gray-500 text-sm text-center py-12">No campaigns yet. Create one above.</p>
+          <div className="glass-card p-12 text-center text-gray-500">
+            <RefreshCw size={32} className="mx-auto mb-3 opacity-20" />
+            <p className="text-sm">No campaigns yet. Design your outreach above.</p>
+          </div>
         )}
         {campaigns.map((c) => {
           const pct = c.total_leads > 0 ? Math.round(((c.sent_count + c.failed_count) / c.total_leads) * 100) : 0;
           const isExpanded = expandedId === c.id;
           return (
-            <div key={c.id} className="glass-card overflow-hidden animate-fade-in">
+            <div key={c.id} className="glass-card overflow-hidden">
               {/* Card header */}
               <div
                 className="p-5 cursor-pointer hover:bg-white/[0.02] transition-colors"
@@ -520,7 +519,7 @@ export default function Campaigns() {
                     {(c.status === 'draft' || c.status === 'paused') && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleLaunch(c.id); }}
-                        className="p-2 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                        className="p-2 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-all"
                         title="Launch"
                       >
                         <Play size={14} />
@@ -529,7 +528,7 @@ export default function Campaigns() {
                     {c.status === 'running' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handlePause(c.id); }}
-                        className="p-2 rounded-lg bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"
+                        className="p-2 rounded-lg bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 transition-all"
                         title="Pause"
                       >
                         <Pause size={14} />
@@ -538,7 +537,7 @@ export default function Campaigns() {
                     {(c.status === 'running' || c.status === 'paused') && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleStop(c.id); }}
-                        className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                        className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all"
                         title="Stop"
                       >
                         <Square size={14} />
@@ -563,7 +562,7 @@ export default function Campaigns() {
 
               {/* Expanded details */}
               {isExpanded && (
-                <div className="border-t border-[#1e1e1e] animate-fade-in">
+                <div className="border-t border-[#1e1e1e]">
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
@@ -577,8 +576,8 @@ export default function Campaigns() {
                         </tr>
                       </thead>
                       <tbody>
-                        {expandedLeads.length === 0 ? (
-                          <tr><td colSpan={6} className="px-5 py-4 text-center text-gray-500">No leads</td></tr>
+                        {(expandedLeads || []).length === 0 ? (
+                          <tr><td colSpan={6} className="px-5 py-4 text-center text-gray-500">No leads processed yet</td></tr>
                         ) : (
                           expandedLeads.map((cl) => (
                             <tr key={cl.id} className="border-b border-[#1e1e1e]">
@@ -594,7 +593,7 @@ export default function Campaigns() {
                                   <button
                                     onClick={() => handleMarkReplied(c.id, cl.lead_id)}
                                     className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-colors"
-                                    title="Mark as replied — skips pending follow-ups"
+                                    title="Mark as replied"
                                   >
                                     <MailCheck size={11} />
                                     Mark Replied
