@@ -27,7 +27,7 @@ async function resetDailyCountIfNeeded(account) {
 // ── Core send loop ───────────────────────────────────
 
 async function sendLoop(campaignId) {
-  if (global.isScraping) {
+  if (global.scraperRunning) {
     console.log(`[Queue] Scraper is running, pausing email queue... Re-checking in 15 seconds.`);
     const timeoutId = setTimeout(() => sendLoop(campaignId), 15000);
     activeIntervals.set(campaignId, timeoutId);
@@ -208,7 +208,7 @@ async function stopCampaign(campaignId) {
 }
 
 async function resumeCampaigns() {
-  if (global.isScraping) return; // Don't even poll if scraping
+  if (global.scraperRunning) return; // Don't even poll if scraping
 
   const { data: runningCampaigns, error } = await supabase
     .from('campaigns')

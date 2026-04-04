@@ -4,7 +4,7 @@
   "description": "MailFlow backend — Express + Supabase + Nodemailer",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node --max-old-space-size=512 index.js",
     "dev": "node --watch index.js"
   },
   "dependencies": {

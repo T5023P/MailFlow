@@ -193,15 +193,18 @@ async function initBrowser() {
   return await puppeteer.launch({
     headless: 'new',
     args: [
-      '--no-sandbox', 
-      '--disable-setuid-sandbox', 
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--disable-gpu',
+      '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
       '--single-process',
+      '--disable-gpu',
       '--disable-extensions',
-      '--disable-blink-features=AutomationControlled'
+      '--disable-background-networking',
+      '--memory-pressure-off',
+      '--max_old_space_size=256'
     ],
     defaultViewport: { width: 1366, height: 768 }
   });
@@ -556,7 +559,7 @@ async function scrapeLeads({ query, campaignId, sources = ['google_maps', 'googl
     console.log(line);
   };
 
-  global.isScraping = true;
+  global.scraperRunning = true;
   try {
 
   log(`Starting multi-source scrape: "${query}"`);
@@ -579,7 +582,7 @@ async function scrapeLeads({ query, campaignId, sources = ['google_maps', 'googl
       logs,
     };
   } finally {
-    global.isScraping = false;
+    global.scraperRunning = false;
   }
 }
 
@@ -617,7 +620,7 @@ async function scrapeLeadsMultiCity({ query, campaignId, sources, onEvent, skipC
     onEvent({ type: 'log', data: line });
   };
 
-  global.isScraping = true;
+  global.scraperRunning = true;
   try {
 
   log(`Starting multi-city scrape: "${query}" across ${citiesToScrape.length} remaining UK cities`);
@@ -707,7 +710,7 @@ async function scrapeLeadsMultiCity({ query, campaignId, sources, onEvent, skipC
     onEvent({ type: 'complete', data: finalResult });
     return finalResult;
   } finally {
-    global.isScraping = false;
+    global.scraperRunning = false;
   }
 }
 
