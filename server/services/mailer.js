@@ -21,12 +21,29 @@ function personalize(template, lead) {
 async function sendEmail({ fromEmail, appPassword, toEmail, subject, body, lead }) {
   try {
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      requireTLS: true,
       auth: {
         user: fromEmail,
         pass: appPassword,
       },
+      tls: {
+        rejectUnauthorized: false
+      },
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000
     });
+
+    try {
+      await transporter.verify();
+      console.log(`[Mailer] SMTP connection verified for ${fromEmail}`);
+    } catch (err) {
+      console.log('[Mailer] SMTP verify failed:', err.message);
+      return { success: false, error: 'SMTP Connection Error: ' + err.message };
+    }
 
     const personalizedSubject = lead ? personalize(subject, lead) : subject;
     const personalizedBody = lead ? personalize(body, lead) : body;
@@ -50,8 +67,15 @@ async function sendEmail({ fromEmail, appPassword, toEmail, subject, body, lead 
 async function verifySmtp(email, appPassword) {
   try {
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      requireTLS: true,
       auth: { user: email, pass: appPassword },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000
     });
     await transporter.verify();
     return { success: true };
