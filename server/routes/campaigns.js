@@ -9,7 +9,7 @@ router.get('/', async (req, res) => {
     // Attempt join with templates first
     const { data, error } = await supabase
       .from('campaigns')
-      .select('*, templates(name)')
+      .select('*, templates!campaigns_template_id_fkey(name)')
       .order('created_at', { ascending: false });
 
     if (error) {

@@ -27,6 +27,8 @@ async function resetDailyCountIfNeeded(account) {
 // ── Core send loop ───────────────────────────────────
 
 async function sendLoop(campaignId) {
+  console.log(`[Queue] sendLoop triggered for campaign: ${campaignId}`);
+
   // Fetch campaign
   const { data: campaign, error: cErr } = await supabase
     .from('campaigns')
@@ -34,7 +36,12 @@ async function sendLoop(campaignId) {
     .eq('id', campaignId)
     .single();
 
+  if (cErr) {
+    console.error(`[Queue] Error fetching campaign ${campaignId}:`, cErr.message);
+  }
+
   if (cErr || !campaign || campaign.status !== 'running') {
+    console.log(`[Queue] Campaign ${campaignId} not running (status: ${campaign?.status}). Stopping.`);
     activeIntervals.delete(campaignId);
     return;
   }
@@ -70,6 +77,8 @@ async function sendLoop(campaignId) {
   const cl = pendingLeads[0];
   const lead = cl.leads;
   let account = cl.accounts;
+
+  console.log(`[Queue] Processing pending lead ${lead?.email} with account ${account?.email}`);
 
   // Reset daily count if date has changed
   if (account) {
@@ -111,6 +120,8 @@ async function sendLoop(campaignId) {
       .eq('id', cl.id);
   }
 
+  console.log(`[Queue] Attempting to send email from ${account.email} to ${lead.email}`);
+  
   // Send email
   const result = await sendEmail({
     fromEmail: account.email,
@@ -122,6 +133,7 @@ async function sendLoop(campaignId) {
   });
 
   if (result.success) {
+    console.log(`[Queue] Successfully sent email to ${lead.email}`);
     // Mark as sent
     await supabase
       .from('campaign_leads')
@@ -144,6 +156,7 @@ async function sendLoop(campaignId) {
     // Schedule follow-up emails
     await scheduleFollowUps(campaignId, lead.id, new Date().toISOString());
   } else {
+    console.error(`[Queue] SMTP Error sending to ${lead.email}:`, result.error);
     // Mark as failed
     await supabase
       .from('campaign_leads')
