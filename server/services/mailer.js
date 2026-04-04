@@ -1,4 +1,5 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
  * Replace all {{variable}} placeholders in a string with lead data.
@@ -16,44 +17,24 @@ function personalize(template, lead) {
 }
 
 /**
- * Send an email via Gmail SMTP using an App Password.
+ * Send an email via Resend API
  */
 async function sendEmail({ fromEmail, appPassword, toEmail, subject, body, lead }) {
   try {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      requireTLS: true,
-      auth: {
-        user: fromEmail,
-        pass: appPassword,
-      },
-      tls: {
-        rejectUnauthorized: false
-      },
-      connectionTimeout: 30000,
-      greetingTimeout: 30000,
-      socketTimeout: 30000
-    });
-
-    try {
-      await transporter.verify();
-      console.log(`[Mailer] SMTP connection verified for ${fromEmail}`);
-    } catch (err) {
-      console.log('[Mailer] SMTP verify failed:', err.message);
-      return { success: false, error: 'SMTP Connection Error: ' + err.message };
-    }
-
     const personalizedSubject = lead ? personalize(subject, lead) : subject;
     const personalizedBody = lead ? personalize(body, lead) : body;
 
-    await transporter.sendMail({
-      from: fromEmail,
+    const { data, error } = await resend.emails.send({
+      from: 'arsh@arshdigital.online',
       to: toEmail,
       subject: personalizedSubject,
       html: personalizedBody,
     });
+
+    if (error) {
+      console.error('[Mailer] Resend API Error:', error);
+      return { success: false, error: error.message };
+    }
 
     return { success: true };
   } catch (err) {
@@ -63,25 +44,10 @@ async function sendEmail({ fromEmail, appPassword, toEmail, subject, body, lead 
 
 /**
  * Verify SMTP credentials are valid.
+ * Bypass for Resend since API keys are handled natively.
  */
 async function verifySmtp(email, appPassword) {
-  try {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      requireTLS: true,
-      auth: { user: email, pass: appPassword },
-      tls: { rejectUnauthorized: false },
-      connectionTimeout: 30000,
-      greetingTimeout: 30000,
-      socketTimeout: 30000
-    });
-    await transporter.verify();
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+  return { success: true };
 }
 
 module.exports = { sendEmail, personalize, verifySmtp };
