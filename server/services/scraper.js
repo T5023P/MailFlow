@@ -192,7 +192,17 @@ async function extractEmailsFromWebsite(websiteUrl, log) {
 async function initBrowser() {
   return await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'],
+    args: [
+      '--no-sandbox', 
+      '--disable-setuid-sandbox', 
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-extensions',
+      '--disable-blink-features=AutomationControlled'
+    ],
     defaultViewport: { width: 1366, height: 768 }
   });
 }
@@ -297,11 +307,10 @@ async function scrapeGoogleMapsNative(query, log) {
       }
       count++;
     }
-
-    await browser.close();
   } catch (err) {
-    if (browser) await browser.close();
     log(`[Google Maps Native] Error: ${err.message}`);
+  } finally {
+    if (browser) await browser.close();
   }
 
   log(`[Google Maps Native] Total valid results: ${results.length}`);
@@ -372,12 +381,10 @@ async function scrapeGoogleSearchNative(query, log) {
 
       await randomDelay(3000, 5000);
     }
-
-    await browser.close();
-
   } catch (err) {
-    if (browser) await browser.close();
     log(`[Google Search Native] Error: ${err.message}`);
+  } finally {
+    if (browser) await browser.close();
   }
 
   log(`[Google Search Native] Total valid results: ${results.length}`);
@@ -533,6 +540,14 @@ async function saveResults({ withEmails, query, campaignId, log }) {
 // ═══════════════════════════════════════════════════════
 
 async function scrapeLeads({ query, campaignId, sources = ['google_maps', 'google_search'] }) {
+  const { isQueueRunning } = require('./queue');
+  if (isQueueRunning && isQueueRunning()) {
+    return {
+      found: 0, saved: 0, skipped: 0, sourceCounts: {}, emails: [],
+      logs: ['[Scraper] Email sender queue is active. Refusing to start scrape to save memory.']
+    };
+  }
+
   const logs = [];
   const log = (msg) => {
     const ts = new Date().toLocaleTimeString();
@@ -540,6 +555,9 @@ async function scrapeLeads({ query, campaignId, sources = ['google_maps', 'googl
     logs.push(line);
     console.log(line);
   };
+
+  global.isScraping = true;
+  try {
 
   log(`Starting multi-source scrape: "${query}"`);
 
@@ -550,16 +568,19 @@ async function scrapeLeads({ query, campaignId, sources = ['google_maps', 'googl
 
   log('\n✦ Scrape complete!');
 
-  return {
-    found: withEmails.length,
-    saved: savedCount,
-    skipped,
-    sourceCounts,
-    emails: withEmails.map(r => ({
-      email: r.email, name: r.name, phone: r.phone || '', website: r.website || '', source: r.source, city: r.city || '',
-    })),
-    logs,
-  };
+    return {
+      found: withEmails.length,
+      saved: savedCount,
+      skipped,
+      sourceCounts,
+      emails: withEmails.map(r => ({
+        email: r.email, name: r.name, phone: r.phone || '', website: r.website || '', source: r.source, city: r.city || '',
+      })),
+      logs,
+    };
+  } finally {
+    global.isScraping = false;
+  }
 }
 
 
@@ -568,6 +589,14 @@ async function scrapeLeads({ query, campaignId, sources = ['google_maps', 'googl
 // ═══════════════════════════════════════════════════════
 
 async function scrapeLeadsMultiCity({ query, campaignId, sources, onEvent, skipCities = [], resumeFound = 0 }) {
+  const { isQueueRunning } = require('./queue');
+  if (isQueueRunning && isQueueRunning()) {
+    onEvent({ type: 'log', data: '[Scraper] Email sender queue is active. Refusing to start scrape to save memory.' });
+    const finalResult = { found: 0, saved: 0, skipped: 0, sourceCounts: {}, citiesScraped: 0, emails: [], logs: ['Skipped scrape: queue running.'] };
+    onEvent({ type: 'complete', data: finalResult });
+    return finalResult;
+  }
+
   const allCities = UK_CITIES;
   const totalCities = allCities.length;
   const citiesToScrape = allCities.filter(c => !skipCities.includes(c));
@@ -587,6 +616,9 @@ async function scrapeLeadsMultiCity({ query, campaignId, sources, onEvent, skipC
     console.log(line);
     onEvent({ type: 'log', data: line });
   };
+
+  global.isScraping = true;
+  try {
 
   log(`Starting multi-city scrape: "${query}" across ${citiesToScrape.length} remaining UK cities`);
 
@@ -670,10 +702,13 @@ async function scrapeLeadsMultiCity({ query, campaignId, sources, onEvent, skipC
       email: r.email, name: r.name, phone: r.phone || '', website: r.website || '', source: r.source, city: r.city || '',
     })),
     logs: allLogs,
-  };
+    };
 
-  onEvent({ type: 'complete', data: finalResult });
-  return finalResult;
+    onEvent({ type: 'complete', data: finalResult });
+    return finalResult;
+  } finally {
+    global.isScraping = false;
+  }
 }
 
 

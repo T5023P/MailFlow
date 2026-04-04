@@ -27,6 +27,13 @@ async function resetDailyCountIfNeeded(account) {
 // ── Core send loop ───────────────────────────────────
 
 async function sendLoop(campaignId) {
+  if (global.isScraping) {
+    console.log(`[Queue] Scraper is running, pausing email queue... Re-checking in 15 seconds.`);
+    const timeoutId = setTimeout(() => sendLoop(campaignId), 15000);
+    activeIntervals.set(campaignId, timeoutId);
+    return;
+  }
+
   console.log(`\n[Queue] Processing campaign: ${campaignId}`);
 
   // Fetch campaign
@@ -201,6 +208,8 @@ async function stopCampaign(campaignId) {
 }
 
 async function resumeCampaigns() {
+  if (global.isScraping) return; // Don't even poll if scraping
+
   const { data: runningCampaigns, error } = await supabase
     .from('campaigns')
     .select('id')
@@ -217,7 +226,11 @@ async function resumeCampaigns() {
   }
 }
 
+function isQueueRunning() {
+  return activeIntervals.size > 0;
+}
+
 // Watchdog: check every 30 seconds for any running campaigns that aren't processing
 setInterval(resumeCampaigns, 30000);
 
-module.exports = { startCampaign, pauseCampaign, stopCampaign, resumeCampaigns };
+module.exports = { startCampaign, pauseCampaign, stopCampaign, resumeCampaigns, isQueueRunning };
