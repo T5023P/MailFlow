@@ -65,10 +65,13 @@ cron.schedule('0 * * * *', () => {
   processFollowUps();
 });
 
+const { resumeCampaigns } = require('./services/queue');
+
 // ── Start server ─────────────────────────────────────
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✦ MailFlow server running on http://localhost:${PORT}`);
   console.log('✦ Cron: Hourly follow-up processor active');
   initScheduler();
+  resumeCampaigns();
 });

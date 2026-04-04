@@ -27,7 +27,7 @@ async function resetDailyCountIfNeeded(account) {
 // ── Core send loop ───────────────────────────────────
 
 async function sendLoop(campaignId) {
-  console.log(`[Queue] sendLoop triggered for campaign: ${campaignId}`);
+  console.log(`\n[Queue] Processing campaign: ${campaignId}`);
 
   // Fetch campaign
   const { data: campaign, error: cErr } = await supabase
@@ -96,6 +96,7 @@ async function sendLoop(campaignId) {
 
     let rotatedAccount = null;
     if (activeAccounts) {
+      console.log(`[Queue] Accounts found for rotation: ${activeAccounts.length}`);
       for (const acc of activeAccounts) {
         await resetDailyCountIfNeeded(acc);
         if (acc.sent_today < acc.daily_cap) {
@@ -156,7 +157,7 @@ async function sendLoop(campaignId) {
     // Schedule follow-up emails
     await scheduleFollowUps(campaignId, lead.id, new Date().toISOString());
   } else {
-    console.error(`[Queue] SMTP Error sending to ${lead.email}:`, result.error);
+    console.error(`[Queue] SMTP error:`, result.error);
     // Mark as failed
     await supabase
       .from('campaign_leads')
@@ -199,4 +200,24 @@ async function stopCampaign(campaignId) {
   activeIntervals.delete(campaignId);
 }
 
-module.exports = { startCampaign, pauseCampaign, stopCampaign };
+async function resumeCampaigns() {
+  const { data: runningCampaigns, error } = await supabase
+    .from('campaigns')
+    .select('id')
+    .eq('status', 'running');
+
+  if (error || !runningCampaigns) return;
+
+  for (const c of runningCampaigns) {
+    if (!activeIntervals.has(c.id)) {
+      console.log(`[Queue] Resuming campaign ${c.id} after server restart / polling`);
+      activeIntervals.set(c.id, true);
+      sendLoop(c.id);
+    }
+  }
+}
+
+// Watchdog: check every 30 seconds for any running campaigns that aren't processing
+setInterval(resumeCampaigns, 30000);
+
+module.exports = { startCampaign, pauseCampaign, stopCampaign, resumeCampaigns };
